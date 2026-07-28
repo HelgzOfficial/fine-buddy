@@ -532,7 +532,17 @@ async function sendMagicLink(email){
 // the right spot.
 async function verifyEmailCode(email, code){
   state.authBusy = true; render();
-  const { error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
+  // Supabase verifies a code against whichever internal "type" it was
+  // actually issued as — "email" for someone who already has an account,
+  // "signup" for a brand-new one. Both show the exact same generic "Token
+  // has expired or is invalid" error if you guess wrong, with no way to
+  // tell which applies from the outside, so we just try both in order
+  // rather than making anyone figure out which kind of account this is.
+  let { error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
+  if(error){
+    const retry = await sb.auth.verifyOtp({ email, token: code, type: 'signup' });
+    error = retry.error;
+  }
   state.authBusy = false;
   if(error){ state.authCodeError = error.message; render(); }
   // on success, onAuthStateChange picks up the new session and re-renders.
