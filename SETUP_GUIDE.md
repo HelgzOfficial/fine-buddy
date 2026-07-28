@@ -1,3 +1,4 @@
+[SETUP_GUIDE.md](https://github.com/user-attachments/files/30463211/SETUP_GUIDE.md)
 # Fine Buddy — Go-Live Guide
 
 Everything in this folder is the real, working app. You don't need to write or understand any code — just follow these steps in order, all done through normal websites in your browser.
@@ -31,13 +32,13 @@ Everything in this folder is the real, working app. You don't need to write or u
 3. Go back to Supabase → **Table Editor** → `players` table. Find the row with your email/name, click into the `is_admin` column, and set it to `true`.
 4. Refresh the app — you'll now see the Admin tabs (Fines, Players, Team, etc). From here on, you can promote any other player to admin from inside the app itself (open their profile from the Players tab → "Make team admin"), so this manual database step is only needed once, ever.
 
-## Step 5 — Take real payments (Stripe)
+## Step 5 — Take real payments (PayPal + bank transfer)
 
-1. In your Stripe Dashboard, go to **Payment links** → **Create payment link**.
-2. Choose **Customer chooses price**, give it a name like "Fine Buddy fine payment", set a reasonable min/max (e.g. £1–£200).
-3. Save it, copy the link.
-4. In the app, go to **Team Settings** and paste it into **Stripe Payment Link**, then **Save settings**.
-5. Apple Pay and Google Pay both appear automatically on that Stripe checkout page for players on supported devices/browsers — there's nothing extra to configure for either of those.
+1. Go to paypal.me and set up a free PayPal.me link for your club's PayPal account (e.g. `paypal.me/RiversideFC`) — no business account or approval process needed.
+2. In the app, go to **Team Settings** and paste that link into **PayPal.me Link**, then fill in your bank details too, then **Save settings**.
+3. When a player taps Pay, the app automatically appends their exact outstanding balance to the PayPal link, so it opens PayPal with the right amount already filled in.
+
+Note: neither PayPal.me nor bank transfer update the app automatically when a payment lands — there's no automatic wallet support here either (that was a Stripe-specific perk we traded away by not using Stripe). Both work the same way: the player pays, then taps "I've paid — mark my balance as paid" in the app as an honesty-system confirmation, and you can always double check against your actual PayPal/bank activity as admin.
 
 ## Step 6 — Set up the team
 
@@ -46,9 +47,27 @@ Everything in this folder is the real, working app. You don't need to write or u
 3. Players tab → **Invite a player** → copy the link and send it to your squad (WhatsApp, group chat, wherever). Each player opens it, enters their email, taps the link Supabase emails them, and they're in — no app store, no install, no password to remember.
 4. Ask each player to add it to their home screen (Share → Add to Home Screen on iPhone, or the "Install app" prompt on Android Chrome) so it behaves like a proper app icon.
 
+## Step 7 — Set up the Committee & Court
+
+Court lets any player dispute a fine in front of a panel of "Committee" members, who discuss it in a live chat thread and then vote guilty or not guilty. Once every eligible Committee member has voted, the case closes itself automatically — a not-guilty verdict even waives the disputed fine on its own.
+
+1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds the Court tables, so if you already ran an older version of this file, you need to run the new one too. It's always safe to re-run.
+2. Players tab → open a player's profile → **Make Committee member**. Do this for however many people you want deciding disputes (admins count as Committee automatically, no need to flag yourself).
+3. That's it — every player now sees a **Take it to Court** button on their Dashboard whenever they owe money, and a **Court** tab in the bottom navigation.
+
+Note on "notifications": there's no push-notification server here (that would need a backend holding device tokens, which this no-backend setup deliberately avoids). Instead, Court uses Supabase's live Realtime feed — while a Committee member has the app open, a new case pops up as an instant on-screen alert and a red dot on the Court tab. If their phone is locked or the app is closed, they'll see it the next time they open Fine Buddy, not before.
+
+## Step 8 — Set up Event suggestions & polls
+
+The Events tab now also lets any player suggest a social event, and lets admins put up a poll (e.g. "where should we go?") for the whole squad to vote on.
+
+1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds the Event suggestions/polls tables, so if you already ran an older version of this file, you need to run the new one too. It's always safe to re-run.
+2. That's it — every player now sees a "Suggest an event" box on the Events tab, and admins get a "+ Create a poll" button there too.
+
 ## What's deliberately simple in this version
 
-- **Payment confirmation**: Stripe payments are instant and automatic (the checkout page itself handles Apple Pay/Google Pay/card). Bank transfers are confirmed on the honour system — the player taps "I've paid" after transferring, same as the prototype. A fully automatic bank-transfer reconciliation would need a proper accounting integration, which is a good "phase two" if you want it.
+- **Payment confirmation**: both PayPal and bank transfer are confirmed on the honour system — the player taps "I've paid" after paying, same as the original prototype. A fully automatic reconciliation (the app updating itself the instant money arrives) would need a payment processor with webhook support, like Stripe, which is a good "phase two" if you want it later.
+- **Notifications**: in-app and live while Fine Buddy is open (see Step 7) rather than true push notifications to a locked phone.
 - **One team per deployment**: this setup is built for your club specifically, not as a multi-team platform. If another team wants Fine Buddy, they'd get their own copy of this same folder and their own free Supabase/Stripe/Vercel projects.
 - **Security model**: good enough for a trusted group of teammates. It is not audited for handling sensitive financial data at scale — for a five-a-side or grassroots club it's solid; I wouldn't put a professional club's full accounting through it untouched.
 
