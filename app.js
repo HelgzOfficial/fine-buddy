@@ -708,12 +708,17 @@ function openInviteModal(){
     if(!name || !email) return;
     const btn = document.getElementById('sendEmailInviteBtn');
     btn.disabled = true; btn.textContent = 'Sending…';
-    await sb.from('pending_invites').upsert({ email, name, invited_by: state.me.id });
+    const { error: pendingError } = await sb.from('pending_invites').upsert({ email, name, invited_by: state.me.id });
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
     closeModal();
     await refresh();
-    if(error) toast('Could not send invite: ' + error.message);
-    else toast(`${name} added — sign-in email sent`);
+    if(error){
+      toast('Could not send invite: ' + error.message);
+    } else if(pendingError){
+      toast(`Sign-in email sent, but the name may not have pre-filled — check the Players tab and rename ${name} if needed.`);
+    } else {
+      toast(`${name} added — sign-in email sent`);
+    }
   });
 }
 
