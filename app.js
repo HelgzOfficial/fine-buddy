@@ -96,6 +96,26 @@ function reasonFor(playerId){
 }
 function isAdmin(){ return !!(state.me && state.me.is_admin); }
 function effectiveRole(){ return isAdmin() && !state.viewAsPlayer ? 'admin' : 'player'; }
+function mostLoggedFine(){
+  if(!state.fineLog.length) return null;
+  const counts = {};
+  state.fineLog.forEach(l=>{ counts[l.label] = (counts[l.label]||0) + 1; });
+  const [label, count] = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  return { label, count };
+}
+
+/* ---------------- icon set (inline SVG, currentColor so they follow theme) ---------------- */
+const ICONS = {
+  dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>`,
+  fines: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 7l-3 7a3 3 0 0 0 6 0z"/><path d="M19 7l-3 7a3 3 0 0 0 6 0z"/><line x1="8" y1="21" x2="16" y2="21"/></svg>`,
+  players: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><circle cx="17.5" cy="8.5" r="2.6"/><path d="M15.2 14.3c2.9.3 5.3 2.6 5.3 5.7"/></svg>`,
+  events: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/></svg>`,
+  team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.7 7.7 0 000-3l2-1.5-2-3.4-2.3.9a7.6 7.6 0 00-2.6-1.5L14 2h-4l-.5 2.4a7.6 7.6 0 00-2.6 1.5l-2.3-.9-2 3.4 2 1.5a7.7 7.7 0 000 3l-2 1.6 2 3.4 2.3-.9c.8.7 1.7 1.2 2.6 1.5L10 22h4l.5-2.4c.9-.3 1.8-.8 2.6-1.5l2.3.9 2-3.4-2-1.6z"/></svg>`,
+  profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="9.5" r="3.2"/><path d="M5.5 19a7 7 0 0113 0"/></svg>`,
+  pay: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><line x1="2.5" y1="9.5" x2="21.5" y2="9.5"/><line x1="6" y1="15" x2="10" y2="15"/></svg>`,
+  gavelSm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 7l-3 7a3 3 0 0 0 6 0z"/><path d="M19 7l-3 7a3 3 0 0 0 6 0z"/><line x1="8" y1="21" x2="16" y2="21"/></svg>`,
+  calendarSm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/></svg>`,
+};
 
 /* ---------------- data loading ---------------- */
 async function loadAll(){
@@ -276,18 +296,18 @@ function renderFab(){
 
 function renderBottomNav(){
   const adminTabs = [
-    ['dashboard','📊','Dashboard'],['fines','⚖️','Fines'],['players','👥','Players'],
-    ['events','📅','Events'],['team','⚙️','Team'],
+    ['dashboard','Dashboard'],['fines','Fines'],['players','Players'],
+    ['events','Events'],['team','Team'],
   ];
   const playerTabs = [
-    ['dashboard','📊','Overview'],['profile','🙋','My Profile'],['fines','⚖️','Fines'],
-    ['events','📅','Events'],['pay','💳','Pay'],
+    ['dashboard','Overview'],['profile','My Profile'],['fines','Fines'],
+    ['events','Events'],['pay','Pay'],
   ];
   const tabs = effectiveRole()==='admin' ? adminTabs : playerTabs;
   return `<nav class="bottom-nav">
-    ${tabs.map(([id,ic,label])=>`
+    ${tabs.map(([id,label])=>`
       <button data-view="${id}" class="${state.view===id?'active':''}">
-        <span class="ic">${ic}</span><span>${label}</span>
+        <span class="ic">${ICONS[id]}</span><span>${label}</span>
       </button>`).join('')}
   </nav>`;
 }
@@ -378,38 +398,82 @@ function viewDashboard(){
 
 /* ---------------- FINES ---------------- */
 function viewFinesAdmin(){
+  const top = mostLoggedFine();
   return `
     <h1 class="page-title">Fines Catalog</h1>
-    <div class="card">
+    <div class="stat-grid" style="margin-bottom:14px;">
+      <div class="stat-tile">
+        <div class="label">Offenses on the books</div>
+        <div class="value">${state.fines.length}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="label">Most logged</div>
+        <div class="value" style="font-size:16px;line-height:1.25;margin-top:7px;">${top ? escapeHtml(top.label) : '—'}</div>
+        ${top ? `<div class="muted" style="margin-top:2px;">${top.count}× this season</div>` : ''}
+      </div>
+    </div>
+
+    <div class="card double-bubble-card ${state.team.double_bubble?'is-on':''}">
       <div class="toggle-row">
-        <div><div class="name">Double Bubble</div><div class="muted">Instantly doubles every fine price below</div></div>
+        <div class="row" style="gap:12px;">
+          <div class="list-icon gold" style="width:44px;height:44px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="5.5"/><circle cx="15" cy="15" r="5.5"/></svg>
+          </div>
+          <div><div class="name">Double Bubble</div><div class="muted">Instantly doubles every fine below</div></div>
+        </div>
         <label class="switch"><input type="checkbox" id="doubleBubbleToggle" ${state.team.double_bubble?'checked':''}><span class="slider"></span></label>
       </div>
     </div>
+
     <div class="section-title">Tap an offense to log it against a player</div>
-    ${state.fines.map(f=>`
-      <div class="fine-chip" data-log-fine="${f.id}">
-        <div>${escapeHtml(f.label)}</div>
-        <div class="row" style="gap:8px;">
-          <span class="price ${state.team.double_bubble?'doubled':''}">${fmt(fineAmountNow(f.price))}</span>
-          <button class="link-btn" data-edit-fine="${f.id}" onclick="event.stopPropagation()">Edit</button>
+    <div class="list-card">
+      ${state.fines.map((f,i)=>`
+        <div class="list-row" data-log-fine="${f.id}">
+          <div class="list-icon ${i%2?'gold':''}">${ICONS.gavelSm}</div>
+          <div class="lbl">
+            <div class="title">${escapeHtml(f.label)}</div>
+            <div class="sub">${fmt(f.price)} standard${state.team.double_bubble?` · doubled to ${fmt(fineAmountNow(f.price))}`:''}</div>
+          </div>
+          <div class="row" style="gap:6px;">
+            <span class="price-tag ${state.team.double_bubble?'doubled':''}">${fmt(fineAmountNow(f.price))}</span>
+            <button class="icon-btn" data-edit-fine="${f.id}" onclick="event.stopPropagation()" aria-label="Edit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.5l5 5L8 21H3v-5z"/></svg>
+            </button>
+          </div>
         </div>
-      </div>
-    `).join('') || `<div class="empty">No fines yet — tap + to add one.</div>`}
+      `).join('') || `<div class="empty">No fines yet — tap + to add one.</div>`}
+    </div>
     <button class="btn btn-outline" id="bulkImportBtn" style="margin-top:6px;">📋 Bulk import fines list</button>
     <small class="disclaimer">Paste "Offense, Price" pairs, one per line, to add lots of fines at once.</small>
   `;
 }
 function viewFinesPlayer(){
+  const top = mostLoggedFine();
   return `
     <h1 class="page-title">Fines Catalog</h1>
-    <div class="banner">${state.team.double_bubble ? '🔴 Double Bubble is currently ON — all fines are doubled!' : 'ℹ️ These are the standard team fines set by your admin.'}</div>
-    ${state.fines.map(f=>`
-      <div class="fine-chip" style="cursor:default;">
-        <div>${escapeHtml(f.label)}</div>
-        <span class="price ${state.team.double_bubble?'doubled':''}">${fmt(fineAmountNow(f.price))}</span>
+    <div class="banner ${state.team.double_bubble?'banner-alert':''}">${state.team.double_bubble ? '🔴 Double Bubble is currently ON — all fines are doubled!' : 'ℹ️ These are the standard team fines set by your admin.'}</div>
+    <div class="stat-grid" style="margin-bottom:14px;">
+      <div class="stat-tile">
+        <div class="label">Offenses</div>
+        <div class="value">${state.fines.length}</div>
       </div>
-    `).join('') || `<div class="empty">No fines set yet.</div>`}
+      <div class="stat-tile">
+        <div class="label">Squad's favourite</div>
+        <div class="value" style="font-size:16px;line-height:1.25;margin-top:7px;">${top ? escapeHtml(top.label) : '—'}</div>
+      </div>
+    </div>
+    <div class="list-card">
+      ${state.fines.map((f,i)=>`
+        <div class="list-row" style="cursor:default;">
+          <div class="list-icon ${i%2?'gold':''}">${ICONS.gavelSm}</div>
+          <div class="lbl">
+            <div class="title">${escapeHtml(f.label)}</div>
+            <div class="sub">Standard price ${fmt(f.price)}</div>
+          </div>
+          <span class="price-tag ${state.team.double_bubble?'doubled':''}">${fmt(fineAmountNow(f.price))}</span>
+        </div>
+      `).join('') || `<div class="empty">No fines set yet.</div>`}
+    </div>
   `;
 }
 
