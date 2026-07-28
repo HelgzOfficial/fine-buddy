@@ -315,9 +315,16 @@ function renderView(){
 /* ---------------- DASHBOARD ---------------- */
 function viewDashboard(){
   const outstanding = playersWithOutstanding();
+  const clear = state.players.filter(p=>playerOwed(p.id)<=0);
   const pct = pctSquadOutstanding();
   return `
     <h1 class="page-title">Dashboard</h1>
+    ${ clear.length ? `
+    <div class="clear-strip">
+      <span class="clear-strip-label">✅ Paid up</span>
+      ${clear.map(p=>`<div class="avatar sm" data-player-click="${p.id}" title="${escapeHtml(p.name)}">${p.photo_url?`<img src="${p.photo_url}">`:initials(p.name)}</div>`).join('')}
+    </div>
+    ` : '' }
     <div class="hero-collected">
       <div class="label">🏆 Total Collected This Season</div>
       <div class="value">${fmt(totalCollected())}</div>
