@@ -1,4 +1,3 @@
-[SETUP_GUIDE.md](https://github.com/user-attachments/files/30463727/SETUP_GUIDE.md)
 # Fine Buddy — Go-Live Guide
 
 Everything in this folder is the real, working app. You don't need to write or understand any code — just follow these steps in order, all done through normal websites in your browser.
@@ -71,6 +70,44 @@ There's now a second page in this folder, `signup.html`, meant purely for sharin
 1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds a new "public read" policy for the `team_info` table (just the team name + crest, nothing sensitive) so this page can show your crest/name before a player has signed in. It's always safe to re-run, and it doesn't remove the existing authenticated-only policy — it just adds an extra, more permissive one alongside it.
 2. Once `signup.html` is uploaded to GitHub and deployed the same way as the rest of the folder (Steps 2–3), its shareable link is simply your app's URL with `/signup.html` on the end — e.g. `https://fine-buddy-yourname.vercel.app/signup.html`.
 3. Paste that link straight into your WhatsApp squad chat. Anyone who taps it sees who it's for, can request their own sign-in link with one tap, and gets told exactly how to add it to their home screen for their specific phone/browser — no separate instructions needed from you.
+
+## Step 10 — Clear out test Court cases
+
+If you (or your teammates) opened any test disputes while trying out Court, there's now a one-tap way to wipe them before going live.
+
+1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds permission for an admin to delete Court cases, which wasn't allowed before (on purpose — verdicts could previously only be resolved automatically, never deleted). It's always safe to re-run.
+2. Go to **Team Settings → Danger zone → Reset Court (clear all cases)**. This permanently deletes every Court case along with its chat messages and votes. Fines, players, and everything else are untouched — it only wipes Court history, same honesty-checked double-confirmation as the existing "Reset all fines & payments" button.
+
+## Step 11 — New player first-login profile screen
+
+New players now see a quick one-time "set up your profile" screen the very first time they sign in (right after clicking their magic link) — they can confirm/edit their name and optionally add a profile picture before they see the normal dashboard. There's a "Skip for now" option too, so nobody gets stuck if they don't want to fill anything in right away — they can always do it later from **My Profile**.
+
+1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds a new `onboarded` column on the `players` table that the app uses to know whether someone still needs this screen. It's always safe to re-run. Anyone who's already added a profile photo is automatically marked as already onboarded, so no existing player gets unexpectedly interrupted by this — only genuinely new signups see it.
+2. That's it — nothing else to configure. Existing players notice nothing different; new players just get this one extra screen the first time they ever open the app.
+
+## Step 12 — Remove a player from the team
+
+1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds permission for an admin to delete a player, which wasn't allowed before. It's always safe to re-run.
+2. Players tab → open the player's profile → **Remove [name] from the team**, at the bottom, with the same two-step "are you sure" confirmation used elsewhere. This wipes their fines, court history, and votes. You can't remove yourself this way (ask another admin) — there always needs to be someone who can undo a mistake.
+3. One honest limitation: this removes them from the app's roster, but it can't reach into Supabase Auth and delete their actual login (that needs a privileged server key this no-backend setup deliberately doesn't hold). In practice that's harmless — if someone you've removed ever opens the app again with an old link, they simply start over as a brand-new player, with no memory of their old fines or history.
+
+Also fixed in that update: a couple of admin actions (clearing a balance, saving a name, promoting to admin/Committee) used to fail silently if something went wrong — for example, if you hadn't re-run the latest `schema.sql` yet and a database permission was missing. Now you'll get a clear on-screen message explaining what went wrong instead of the button just seeming to do nothing.
+
+## Step 13 — Sign in with a code instead of a link (fixes the Home Screen icon)
+
+iPhones treat Safari and an app "saved to Home Screen" as two separate lockers, and tapping the link in a sign-in email always opens Safari — never the Home Screen icon directly, even if that's where you asked for the link from. That combination means a link-only sign-in can never actually reach the icon's own storage, which is why it kept sending you back to the sign-in screen no matter what.
+
+The fix: the app now also emails a plain 6-digit code alongside the link. Typing that code back into whichever screen you're already on (the icon included) finishes sign-in right there, with no jump through Safari to lose the session along the way. **This is a one-time thing per icon** — once you've typed the code in once, that icon stays signed in indefinitely afterwards, exactly like a normal browser tab does. Nobody has to do this every time they open the app.
+
+1. Update `index.html` and `app.js` from this folder (Steps 2–3).
+2. In your Supabase dashboard, go to **Authentication → Email Templates → Magic Link**. Supabase's default template only includes the clickable link, not the code, so add a line to the template body that includes `{{ .Token }}` — for example:
+   ```html
+   <h2>Sign in to Fine Buddy</h2>
+   <p><a href="{{ .ConfirmationURL }}">Tap here to sign in</a></p>
+   <p>Or enter this code in the app: <strong>{{ .Token }}</strong></p>
+   ```
+   Click **Save**. No `schema.sql` re-run needed for this step — it's an email setting, not a database change.
+3. That's it. From now on, the sign-in email includes both options: the link (fastest on a regular phone browser) and the code (the one that actually works from a Home Screen icon).
 
 ## What's deliberately simple in this version
 
