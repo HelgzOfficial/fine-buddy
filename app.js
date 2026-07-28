@@ -709,12 +709,21 @@ function openPlayerDetailModal(playerId){
     ${logs.length? logs.map(l=>`
       <div class="row between" style="margin-bottom:8px;">
         <div><div style="font-size:13.5px;font-weight:700;">${escapeHtml(l.label)}</div><div class="muted">${l.date}</div></div>
-        <span class="pill ${l.paid?'clear':'owed'}">${fmt(l.amount)}</span>
+        <div class="row" style="gap:8px;">
+          <span class="pill ${l.paid?'clear':'owed'}">${fmt(l.amount)}</span>
+          <button class="link-btn" data-del-log="${l.id}" title="Delete this fine entry">✕</button>
+        </div>
       </div>`).join('') : `<div class="empty">No fines yet</div>`}
     <div class="divider"></div>
     <button class="btn btn-primary" id="markPlayerPaidBtn">Mark all as paid</button>
     ${!p.is_admin ? `<button class="btn btn-outline" id="makeAdminBtn" style="margin-top:8px;">Make team admin</button>` : ''}
   `, { title:'Player details' });
+  modalNode.querySelectorAll('[data-del-log]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this fine entry? This cannot be undone.')) return;
+    await sb.from('fine_log').delete().eq('id', btn.dataset.delLog);
+    closeModal(); await refresh();
+    toast('Fine entry deleted');
+  }));
   document.getElementById('markPlayerPaidBtn').addEventListener('click', async ()=>{
     const unpaid = logsFor(p.id).filter(l=>!l.paid).map(l=>l.id);
     if(unpaid.length) await sb.from('fine_log').update({ paid:true }).in('id', unpaid);
