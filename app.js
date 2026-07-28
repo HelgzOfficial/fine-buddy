@@ -691,10 +691,29 @@ function openInviteModal(){
     <div class="muted">Share this link with a player. They just enter their email and we'll send them a sign-in link — their account and profile are created automatically the first time they sign in.</div>
     <div class="card" style="margin-top:10px;word-break:break-all;font-weight:700;">${link}</div>
     <button class="btn btn-outline" id="copyInviteBtn" style="margin-top:14px;">📋 Copy link</button>
+    <div class="divider"></div>
+    <label class="field-label">Or add them directly by email</label>
+    <input type="text" id="inviteNameInput" placeholder="Player's full name">
+    <input type="email" id="inviteEmailInput" placeholder="their@email.com" style="margin-top:8px;">
+    <button class="btn btn-primary" id="sendEmailInviteBtn" style="margin-top:10px;">Add player &amp; send sign-in email</button>
+    <small class="disclaimer">This adds them to your squad immediately with the name you enter, and emails them a link to activate their account whenever they're ready.</small>
   `, { title:'Invite a player' });
   document.getElementById('copyInviteBtn').addEventListener('click', ()=>{
     navigator.clipboard?.writeText(link).catch(()=>{});
     toast('Invite link copied');
+  });
+  document.getElementById('sendEmailInviteBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('inviteNameInput').value.trim();
+    const email = document.getElementById('inviteEmailInput').value.trim();
+    if(!name || !email) return;
+    const btn = document.getElementById('sendEmailInviteBtn');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    await sb.from('pending_invites').upsert({ email, name, invited_by: state.me.id });
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+    closeModal();
+    await refresh();
+    if(error) toast('Could not send invite: ' + error.message);
+    else toast(`${name} added — sign-in email sent`);
   });
 }
 
@@ -704,8 +723,14 @@ function openPlayerDetailModal(playerId){
   openModal(`
     <div class="row" style="gap:12px;margin-bottom:14px;">
       <div class="avatar lg">${p.photo_url?`<img src="${p.photo_url}">`:initials(p.name)}</div>
-      <div><div class="name" style="font-size:16px;">${escapeHtml(p.name)}</div><div class="muted">Owes ${fmt(playerOwed(p.id))} · Paid ${fmt(playerPaidTotal(p.id))}</div></div>
+      <div style="flex:1;"><div class="muted">Owes ${fmt(playerOwed(p.id))} · Paid ${fmt(playerPaidTotal(p.id))}</div></div>
     </div>
+    <label class="field-label">Name</label>
+    <div class="row" style="gap:8px;">
+      <input type="text" id="editPlayerNameInput" value="${escapeHtml(p.name)}" style="flex:1;">
+      <button class="btn btn-outline btn-sm" id="savePlayerNameBtn">Save</button>
+    </div>
+    <div class="divider"></div>
     ${logs.length? logs.map(l=>`
       <div class="row between" style="margin-bottom:8px;">
         <div><div style="font-size:13.5px;font-weight:700;">${escapeHtml(l.label)}</div><div class="muted">${l.date}</div></div>
@@ -724,6 +749,13 @@ function openPlayerDetailModal(playerId){
     closeModal(); await refresh();
     toast('Fine entry deleted');
   }));
+  document.getElementById('savePlayerNameBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('editPlayerNameInput').value.trim();
+    if(!name) return;
+    await sb.from('players').update({ name }).eq('id', p.id);
+    closeModal(); await refresh();
+    toast('Name updated');
+  });
   document.getElementById('markPlayerPaidBtn').addEventListener('click', async ()=>{
     const unpaid = logsFor(p.id).filter(l=>!l.paid).map(l=>l.id);
     if(unpaid.length) await sb.from('fine_log').update({ paid:true }).in('id', unpaid);
