@@ -480,7 +480,7 @@ function viewPay(){
       ${paypalUrl ? `<a class="btn paypal-btn" href="${paypalUrl}" target="_blank" rel="noopener">Pay ${fmt(owed)} with PayPal</a>` : ''}
       ${paypalUrl && monzoUrl ? `<div style="height:10px;"></div>` : ''}
       ${monzoUrl ? `<a class="btn monzo-btn" href="${monzoUrl}" target="_blank" rel="noopener">Pay ${fmt(owed)} with Monzo</a>` : ''}
-      <small class="disclaimer">Opens the app with the amount already filled in. Tap "I've paid" below once it's gone through, so your admin sees your balance clear.</small>
+      <small class="disclaimer">Opens the app with the amount already filled in. Once you've paid, your admin will confirm it and your balance will clear.</small>
     </div>` : isAdmin() ? `<div class="banner">Add a PayPal.me or Monzo.me link in Team Settings to enable instant payments here.</div>` : `<div class="banner">Ask your admin to add a PayPal or Monzo link in Team Settings for instant one-tap payments.</div>`}
     <div class="section-title">Bank transfer</div>
     <div class="card">
@@ -489,8 +489,7 @@ function viewPay(){
       <div class="row between"><div class="muted">Account number</div><div class="name">${escapeHtml(t.bank_account_number||'—')}</div></div>
       <div class="row between"><div class="muted">Reference</div><div class="name">${escapeHtml(t.bank_reference||'FINE')}-${p.name.split(' ')[0].toUpperCase()}</div></div>
     </div>
-    ${ owed>0 ? `<button class="btn btn-outline" id="markPaidBtn" data-player="${p.id}">I've paid — mark my balance as paid</button>` : '' }
-    <small class="disclaimer">Marking your balance as paid here is an honesty-system confirmation for your admin — none of the payment methods above are wired up to auto-update the app on their own.</small>
+    ${ owed>0 ? `<div class="banner">Once you've paid, your admin confirms it on their end — balances can only be marked as paid by a team admin, to keep the totals trustworthy.</div>` : '' }
   `;
 }
 
@@ -547,6 +546,12 @@ function viewTeamSettings(){
       <label class="field-label">Payment reference prefix</label>
       <input type="text" id="bankRefInput" value="${escapeHtml(t.bank_reference||'')}">
       <button class="btn btn-primary" id="saveTeamSettingsBtn" style="margin-top:14px;">Save settings</button>
+    </div>
+
+    <div class="section-title">Danger zone</div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:10px;">Permanently deletes every logged fine and resets everyone's "paid this season" total back to £0.00. Your fines catalog, players, events, and announcements are untouched — just the money data gets wiped. Use this once, right before you actually launch, to clear out test entries.</div>
+      <button class="btn btn-danger" id="resetFinesBtn">Reset all fines &amp; payments</button>
     </div>
   `;
 }
@@ -654,14 +659,17 @@ function bindGlobalEvents(){
     toast('Team settings saved');
   });
 
-  const markPaidBtn = document.getElementById('markPaidBtn');
-  if(markPaidBtn) markPaidBtn.addEventListener('click', async ()=>{
-    const pid = markPaidBtn.dataset.player;
-    const unpaid = state.fineLog.filter(l=>l.player_id===pid && !l.paid).map(l=>l.id);
-    if(unpaid.length) await sb.from('fine_log').update({ paid:true }).in('id', unpaid);
+  const resetFinesBtn = document.getElementById('resetFinesBtn');
+  if(resetFinesBtn) resetFinesBtn.addEventListener('click', async ()=>{
+    if(!confirm('This permanently deletes every logged fine and resets all "paid this season" totals to £0.00. This cannot be undone. Continue?')) return;
+    if(!confirm('Last check — are you absolutely sure? Everyone\'s fine history and payment totals will be wiped completely.')) return;
+    const NEVER_A_REAL_ID = '00000000-0000-0000-0000-000000000000';
+    await sb.from('fine_log').delete().neq('id', NEVER_A_REAL_ID);
+    await sb.from('players').update({ season_paid: 0 }).neq('id', NEVER_A_REAL_ID);
     await refresh();
-    toast('Balance marked as paid ✅');
+    toast('All fines and payments have been reset');
   });
+
 }
 
 /* ---------------- Modals ---------------- */
