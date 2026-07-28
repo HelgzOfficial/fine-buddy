@@ -57,6 +57,43 @@ function mostWantedPlayer(){
     return aOldest-bOldest;
   })[0];
 }
+// A bank of jokey "wanted for" captions. Real, live AI text-generation per
+// player would need a server-side function holding an API key (something
+// this no-backend setup deliberately avoids) — so instead each player gets a
+// deterministically-picked line from this bank, based on their own id, which
+// rotates weekly so it doesn't feel entirely static.
+const WANTED_REASONS = [
+  "for arriving fashionably late to training — again",
+  "last seen avoiding eye contact with the treasurer",
+  "wanted for crimes against punctuality",
+  "suspected of hiding boots in the depths of a kit bag",
+  "for a phone that rang mid team-talk",
+  "for a first touch heavier than the fine itself",
+  "last spotted sprinting from the changing room, not the pitch",
+  "wanted for an own goal nobody has forgiven",
+  "for celebrating like it was the World Cup final",
+  "suspected of forging a doctor's note for training",
+  "for a WhatsApp message left on read for a week",
+  "last seen blaming the ref for something that was clearly their fault",
+  "wanted for wearing the wrong colour socks. Again.",
+  "for a nutmeg that still haunts the group chat",
+  "suspected of eating the last of the half-time oranges",
+  "for parking in the manager's spot",
+  "wanted for an ambitious rabona that ended in a throw-in",
+  "last seen ghosting the car-share rota",
+  "for claiming '5 minutes away' from 45 minutes away",
+  "wanted for a tactical foul with zero tactical value",
+  "for turning up to five-a-side in full kit, shin pads and all",
+  "suspected of taking the captain's armband without asking",
+  "for a goal celebration bigger than the goal itself",
+  "last seen dodging the fines pot like a seasoned defender",
+];
+function reasonFor(playerId){
+  let hash = 0;
+  const salted = playerId + '-' + Math.floor((new Date().getTime())/(1000*60*60*24*7)); // rotates weekly
+  for(let i=0;i<salted.length;i++){ hash = (hash*31 + salted.charCodeAt(i)) >>> 0; }
+  return WANTED_REASONS[hash % WANTED_REASONS.length];
+}
 function isAdmin(){ return !!(state.me && state.me.is_admin); }
 function effectiveRole(){ return isAdmin() && !state.viewAsPlayer ? 'admin' : 'player'; }
 
@@ -279,7 +316,6 @@ function renderView(){
 function viewDashboard(){
   const outstanding = playersWithOutstanding();
   const pct = pctSquadOutstanding();
-  const wanted = mostWantedPlayer();
   return `
     <h1 class="page-title">Dashboard</h1>
     <div class="hero-collected">
@@ -294,24 +330,26 @@ function viewDashboard(){
         <div class="pct-detail">${outstanding.length} of ${state.players.length} players · ${fmt(totalOutstanding())} outstanding</div>
       </div>
     </div>
-    ${ wanted ? `
     <div class="section-title">🚨 Wall of Shame</div>
-    <div class="wanted-wrap">
-      <div class="wanted-poster">
-        <div class="wanted-title">Wanted</div>
-        <div class="wanted-photo">${wanted.photo_url?`<img src="${wanted.photo_url}">`:initials(wanted.name)}</div>
-        <div class="wanted-name">${escapeHtml(wanted.name)}</div>
-        <div class="wanted-for">for dodging the fines pot</div>
-        <div class="wanted-bounty">Owes <span class="amt">${fmt(playerOwed(wanted.id))}</span></div>
-      </div>
-    </div>` : `
-    <div class="section-title">🚨 Wall of Shame</div>
-    <div class="card empty">🎉 Nobody's wanted — the whole squad is paid up!</div>` }
+    ${ outstanding.length ? `
+    <div class="wanted-row">
+      ${outstanding.map(pl=>`
+        <div class="wanted-poster compact" data-player-click="${pl.id}">
+          <div class="wanted-title">Wanted</div>
+          <div class="wanted-photo">${pl.photo_url?`<img src="${pl.photo_url}">`:initials(pl.name)}</div>
+          <div class="wanted-name">${escapeHtml(pl.name)}</div>
+          <div class="wanted-for">${escapeHtml(reasonFor(pl.id))}</div>
+          <div class="wanted-bounty">Owes <span class="amt">${fmt(playerOwed(pl.id))}</span></div>
+        </div>
+      `).join('')}
+    </div>
+    <small class="disclaimer">Tap a poster ${isAdmin() ? "to open that player's details" : "— if it's you, it'll take you straight to Pay"}.</small>
+    ` : `<div class="card empty">🎉 Nobody's wanted — the whole squad is paid up!</div>` }
 
     <div class="section-title">Players with outstanding balances</div>
     <div class="card">
       ${ outstanding.length ? outstanding.map(p=>`
-        <div class="row between" style="margin-bottom:10px;">
+        <div class="row between" style="margin-bottom:10px;cursor:pointer;" data-player-click="${p.id}">
           <div class="row" style="gap:10px;">
             <div class="avatar">${p.photo_url?`<img src="${p.photo_url}">`:initials(p.name)}</div>
             <div><div class="name">${escapeHtml(p.name)}</div><div class="muted">owes ${fmt(playerOwed(p.id))}</div></div>
@@ -443,7 +481,7 @@ function viewPay(){
       ${paypalUrl && monzoUrl ? `<div style="height:10px;"></div>` : ''}
       ${monzoUrl ? `<a class="btn monzo-btn" href="${monzoUrl}" target="_blank" rel="noopener">Pay ${fmt(owed)} with Monzo</a>` : ''}
       <small class="disclaimer">Opens the app with the amount already filled in. Tap "I've paid" below once it's gone through, so your admin sees your balance clear.</small>
-    </div>` : isAdmin() ? `<div class="banner">Add a PayPal.me or Monzo.me link in Team Settings to enable instant payments here.</div>` : ''}
+    </div>` : isAdmin() ? `<div class="banner">Add a PayPal.me or Monzo.me link in Team Settings to enable instant payments here.</div>` : `<div class="banner">Ask your admin to add a PayPal or Monzo link in Team Settings for instant one-tap payments.</div>`}
     <div class="section-title">Bank transfer</div>
     <div class="card">
       <div class="row between"><div class="muted">Account name</div><div class="name">${escapeHtml(t.bank_account_name||'—')}</div></div>
@@ -533,9 +571,11 @@ function fileToPath(prefix, file){
   return `${prefix}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
 }
 async function uploadImage(prefix, file){
+  if(!file.type || !file.type.startsWith('image/')){ toast('Please choose an image file.'); return null; }
+  if(file.size > 8*1024*1024){ toast('That image is too large — please use one under 8MB.'); return null; }
   const path = fileToPath(prefix, file);
   const { error } = await sb.storage.from('media').upload(path, file, { cacheControl:'3600', upsert:false });
-  if(error){ toast('Upload failed: ' + error.message); return null; }
+  if(error){ toast('Upload failed: ' + error.message + ' — check the "media" storage bucket exists and is public.'); return null; }
   const { data } = sb.storage.from('media').getPublicUrl(path);
   return data.publicUrl;
 }
@@ -548,6 +588,11 @@ function bindGlobalEvents(){
   root.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click', ()=>{ state.view=b.dataset.view; render(); }));
   root.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click', ()=>{ state.view=b.dataset.goto; render(); }));
   root.querySelectorAll('[data-open-player]').forEach(b=>b.addEventListener('click', ()=>openPlayerDetailModal(b.dataset.openPlayer)));
+  root.querySelectorAll('[data-player-click]').forEach(el=>el.addEventListener('click', ()=>{
+    const pid = el.dataset.playerClick;
+    if(pid === state.me.id){ state.view = 'pay'; render(); }
+    else if(isAdmin()){ openPlayerDetailModal(pid); }
+  }));
   ['signOutBtn','signOutBtn2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', signOut); });
 
   root.querySelectorAll('[data-del-announce]').forEach(b=>b.addEventListener('click', async ()=>{
@@ -575,14 +620,16 @@ function bindGlobalEvents(){
   const crestInput = document.getElementById('crestInput');
   if(crestInput) crestInput.addEventListener('change', async (e)=>{
     if(!e.target.files[0]) return;
+    toast('Uploading crest…');
     const url = await uploadImage('crests', e.target.files[0]);
-    if(url){ await sb.from('team_info').update({ crest_url:url }).eq('id',1); await refresh(); }
+    if(url){ await sb.from('team_info').update({ crest_url:url }).eq('id',1); await refresh(); toast('Crest updated'); }
   });
   const playerPhotoInput = document.getElementById('playerPhotoInput');
   if(playerPhotoInput) playerPhotoInput.addEventListener('change', async (e)=>{
     if(!e.target.files[0]) return;
+    toast('Uploading photo…');
     const url = await uploadImage('players', e.target.files[0]);
-    if(url){ await sb.from('players').update({ photo_url:url }).eq('id', state.me.id); await refresh(); }
+    if(url){ await sb.from('players').update({ photo_url:url }).eq('id', state.me.id); await refresh(); toast('Profile picture updated'); }
   });
   const saveNameBtn = document.getElementById('saveNameBtn');
   if(saveNameBtn) saveNameBtn.addEventListener('click', async ()=>{
