@@ -40,6 +40,24 @@ const state = {
 function fmt(n){ return '£' + (Math.round((n||0)*100)/100).toFixed(2); }
 function initials(name){ return (name||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
+function daysUntil(dateStr){
+  const today = new Date(todayISO()+'T00:00:00');
+  const target = new Date(dateStr+'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+function countdownLabel(dateStr){
+  const d = daysUntil(dateStr);
+  if(d === 0) return 'Today!';
+  if(d === 1) return 'Tomorrow';
+  if(d > 1) return `In ${d} days`;
+  if(d === -1) return 'Yesterday';
+  return `${Math.abs(d)} days ago`;
+}
+function nextUpcomingEvent(){
+  const today = todayISO();
+  const upcoming = state.events.filter(e=>e.date >= today).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  return upcoming[0] || null;
+}
 function startOfWeek(d){ d=new Date(d); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
 function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fineAmountNow(price){ return state.team.double_bubble ? price*2 : price; }
@@ -483,6 +501,12 @@ function render(){
     root.innerHTML = `<div class="loading-screen"><div class="spinner" style="width:28px;height:28px;border-width:3px;"></div><div>Setting up your profile…</div></div>`;
     return;
   }
+  if(state.me.onboarded === false){
+    root.innerHTML = renderInstallBanner() + viewOnboarding();
+    bindOnboardingEvents();
+    bindInstallBannerEvents();
+    return;
+  }
   root.innerHTML = `
     ${renderTopbar()}
     ${renderInstallBanner()}
@@ -656,6 +680,7 @@ function viewDashboard(){
   const latestVerdict = resolvedCourtCases()[0];
   const pendingForMe = openCasesNeedingMyVote();
   const offender = serialOffender();
+  const nextEvent = nextUpcomingEvent();
   return `
     <h1 class="page-title">Dashboard</h1>
     ${ clear.length ? `
@@ -733,6 +758,18 @@ function viewDashboard(){
         <div style="margin-top:6px;font-size:14.5px;">${escapeHtml(a.text)}</div>
       </div>
     `).join('') || `<div class="empty">No announcements yet.</div>`}
+
+    ${ nextEvent ? `
+    <div class="section-title">Next event</div>
+    <div class="card event-countdown-card" data-goto="events">
+      <div class="ec-label">📅 Next up</div>
+      <div class="ec-title">${escapeHtml(nextEvent.title)}</div>
+      <div class="row between" style="margin-top:6px;">
+        <div class="ec-date">${nextEvent.date}</div>
+        <div class="ec-countdown">${countdownLabel(nextEvent.date)}</div>
+      </div>
+    </div>
+    ` : '' }
   `;
 }
 
@@ -918,6 +955,53 @@ function viewCourtPlayer(){
   `;
 }
 
+/* ---------------- FIRST-LOGIN ONBOARDING ---------------- */
+// Shown once, right after a brand-new player's magic link lands them in the
+// app for the first time (state.me.onboarded === false) — a full-takeover
+// screen with no topbar/nav, mirroring how the signed-out auth screen is
+// rendered, so it reads as a distinct "getting set up" step rather than a
+// bolted-on modal over the normal app chrome.
+function viewOnboarding(){
+  const p = state.me;
+  return `
+  <div class="auth-wrap">
+    <div class="auth-title" style="margin-bottom:4px;">Welcome to Fine Buddy!</div>
+    <div class="auth-sub">Let's get your profile set up — it only takes a second.</div>
+    <div class="auth-card center-text">
+      <div class="avatar lg" style="margin:0 auto 14px;">${p.photo_url?`<img src="${p.photo_url}">`:initials(p.name)}</div>
+      <label class="upload-tile">
+        📷 Add a profile picture (optional)
+        <input type="file" accept="image/*" class="file-hidden" id="onboardPhotoInput">
+      </label>
+      <label class="field-label" style="text-align:left;margin-top:14px;">Your name</label>
+      <input type="text" id="onboardNameInput" value="${escapeHtml(p.name)}">
+      <button class="btn btn-primary" id="onboardContinueBtn" style="margin-top:16px;">Continue</button>
+      <button class="link-btn" id="onboardSkipBtn" style="margin-top:14px;">Skip for now</button>
+      <small class="disclaimer">You can always update your name or photo later from My Profile.</small>
+    </div>
+  </div>`;
+}
+function bindOnboardingEvents(){
+  const photoInput = document.getElementById('onboardPhotoInput');
+  if(photoInput) photoInput.addEventListener('change', async (e)=>{
+    if(!e.target.files[0]) return;
+    toast('Uploading photo…');
+    const url = await uploadImage('players', e.target.files[0]);
+    if(url){ await sb.from('players').update({ photo_url:url }).eq('id', state.me.id); await refresh(); toast('Photo added'); }
+  });
+  const continueBtn = document.getElementById('onboardContinueBtn');
+  if(continueBtn) continueBtn.addEventListener('click', async ()=>{
+    const name = document.getElementById('onboardNameInput').value.trim() || state.me.name;
+    await sb.from('players').update({ name, onboarded:true }).eq('id', state.me.id);
+    await refresh();
+  });
+  const skipBtn = document.getElementById('onboardSkipBtn');
+  if(skipBtn) skipBtn.addEventListener('click', async ()=>{
+    await sb.from('players').update({ onboarded:true }).eq('id', state.me.id);
+    await refresh();
+  });
+}
+
 /* ---------------- PLAYER PROFILE ---------------- */
 function viewPlayerProfile(){
   const p = state.me;
@@ -1038,7 +1122,10 @@ function viewEvents(){
           <div class="name">${escapeHtml(e.title)}</div>
           ${isAdmin()?`<button class="link-btn" style="color:#fff;" data-del-event="${e.id}">Delete</button>`:''}
         </div>
-        <div class="muted" style="margin:4px 0 8px;">📅 ${e.date}</div>
+        <div class="row between" style="margin:4px 0 8px;">
+          <div class="muted" style="font-weight:800;">📅 ${e.date}</div>
+          <div class="pill gold">${countdownLabel(e.date)}</div>
+        </div>
         <div style="font-size:14px;">${escapeHtml(e.description||'')}</div>
         ${e.funds_note?`<div class="pill gold" style="margin-top:8px;">${escapeHtml(e.funds_note)}</div>`:''}
         ${e.link?`<a class="btn btn-gold" style="margin-top:12px;" href="${e.link}" target="_blank" rel="noopener">🎟️ View tickets / booking link</a>`:''}
