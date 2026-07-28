@@ -413,11 +413,56 @@ function consumeUrlAuthArtifacts(){
   return Promise.resolve();
 }
 
+// ---------------- Cross-context session bridge ----------------
+// On iOS, Safari and a "saved to Home Screen" copy of this same site are
+// treated as two completely separate storage silos — localStorage (where
+// Supabase normally keeps your session) written in one is invisible to the
+// other. Since a magic-link email always opens in Safari (iOS won't hand it
+// to the installed icon directly), signing in there doesn't carry over to
+// the Home Screen icon, which is exactly the "brings me back to sign-in"
+// problem this fixes. The one thing iOS DOES share between those two
+// contexts is the Cache Storage API, so we mirror the session tokens there
+// as a bridge: every time we have a session, stash it in a cache; every
+// time we boot up with no session, check the cache before giving up and
+// showing the sign-in screen.
+const SESSION_BRIDGE_CACHE = 'fine-buddy-session-bridge-v1';
+const SESSION_BRIDGE_KEY = new Request('https://fine-buddy.internal/session-bridge');
+async function saveSessionBridge(session){
+  if(!('caches' in window) || !session || !session.access_token || !session.refresh_token) return;
+  try{
+    const cache = await caches.open(SESSION_BRIDGE_CACHE);
+    await cache.put(SESSION_BRIDGE_KEY, new Response(JSON.stringify({
+      access_token: session.access_token, refresh_token: session.refresh_token
+    }), { headers: { 'Content-Type': 'application/json' } }));
+  }catch(e){ /* best-effort — never block sign-in on this */ }
+}
+async function loadSessionBridge(){
+  if(!('caches' in window)) return null;
+  try{
+    const cache = await caches.open(SESSION_BRIDGE_CACHE);
+    const res = await cache.match(SESSION_BRIDGE_KEY);
+    if(!res) return null;
+    return await res.json();
+  }catch(e){ return null; }
+}
+async function clearSessionBridge(){
+  if(!('caches' in window)) return;
+  try{ const cache = await caches.open(SESSION_BRIDGE_CACHE); await cache.delete(SESSION_BRIDGE_KEY); }catch(e){ /* ignore */ }
+}
+
 async function boot(){
   await consumeUrlAuthArtifacts();
-  const { data: { session } } = await sb.auth.getSession();
+  let { data: { session } } = await sb.auth.getSession();
+  if(!session){
+    const bridged = await loadSessionBridge();
+    if(bridged){
+      const { data, error } = await sb.auth.setSession({ access_token: bridged.access_token, refresh_token: bridged.refresh_token });
+      if(!error && data && data.session) session = data.session;
+    }
+  }
   state.session = session;
   if(session){
+    await saveSessionBridge(session);
     await loadAll();
     subscribeGlobalCourtNotifications();
   }
@@ -427,10 +472,12 @@ async function boot(){
   sb.auth.onAuthStateChange(async (event, session) => {
     state.session = session;
     if(session){
+      await saveSessionBridge(session);
       await loadAll();
       subscribeGlobalCourtNotifications();
     } else {
       state.me = null;
+      await clearSessionBridge();
     }
     render();
   });
@@ -1509,37 +1556,57 @@ function openPlayerDetailModal(playerId){
     <button class="btn btn-primary" id="markPlayerPaidBtn">Mark all as paid</button>
     ${!p.is_admin ? `<button class="btn btn-outline" id="makeAdminBtn" style="margin-top:8px;">Make team admin</button>` : ''}
     <button class="btn btn-outline" id="toggleCommitteeBtn" style="margin-top:8px;">${p.is_committee ? 'Remove from Committee' : '⚖️ Make Committee member'}</button>
+    ${ p.id !== state.me.id ? `
+    <button class="btn btn-danger" id="deletePlayerBtn" style="margin-top:16px;">🗑️ Remove ${escapeHtml(p.name)} from the team</button>
+    <small class="disclaimer">Wipes their fines, court history, and votes from the app. Their sign-in itself isn't deleted (there's no undo-proof way to do that from here) — if they ever open the app again with their old link, they'll just start fresh as a brand-new player.</small>
+    ` : `<div class="muted" style="margin-top:16px;text-align:center;">You can't remove yourself — ask another admin.</div>` }
   `, { title:'Player details' });
   modalNode.querySelectorAll('[data-del-log]').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!confirm('Delete this fine entry? This cannot be undone.')) return;
-    await sb.from('fine_log').delete().eq('id', btn.dataset.delLog);
+    const { error } = await sb.from('fine_log').delete().eq('id', btn.dataset.delLog);
+    if(error){ toast('Could not delete that entry: ' + error.message); return; }
     closeModal(); await refresh();
     toast('Fine entry deleted');
   }));
   document.getElementById('savePlayerNameBtn').addEventListener('click', async ()=>{
     const name = document.getElementById('editPlayerNameInput').value.trim();
     if(!name) return;
-    await sb.from('players').update({ name }).eq('id', p.id);
+    const { error } = await sb.from('players').update({ name }).eq('id', p.id);
+    if(error){ toast('Could not save that name: ' + error.message); return; }
     closeModal(); await refresh();
     toast('Name updated');
   });
   document.getElementById('markPlayerPaidBtn').addEventListener('click', async ()=>{
     const unpaid = logsFor(p.id).filter(l=>!l.paid).map(l=>l.id);
-    if(unpaid.length) await sb.from('fine_log').update({ paid:true }).in('id', unpaid);
+    if(unpaid.length){
+      const { error } = await sb.from('fine_log').update({ paid:true }).in('id', unpaid);
+      if(error){ toast("Couldn't clear their balance: " + error.message); return; }
+    }
     closeModal(); await refresh();
     toast(`${p.name}'s balance cleared`);
   });
   const makeAdminBtn = document.getElementById('makeAdminBtn');
   if(makeAdminBtn) makeAdminBtn.addEventListener('click', async ()=>{
-    await sb.from('players').update({ is_admin:true }).eq('id', p.id);
+    const { error } = await sb.from('players').update({ is_admin:true }).eq('id', p.id);
+    if(error){ toast('Could not update: ' + error.message); return; }
     closeModal(); await refresh();
     toast(`${p.name} is now a team admin`);
   });
   const toggleCommitteeBtn = document.getElementById('toggleCommitteeBtn');
   if(toggleCommitteeBtn) toggleCommitteeBtn.addEventListener('click', async ()=>{
-    await sb.from('players').update({ is_committee: !p.is_committee }).eq('id', p.id);
+    const { error } = await sb.from('players').update({ is_committee: !p.is_committee }).eq('id', p.id);
+    if(error){ toast('Could not update: ' + error.message); return; }
     closeModal(); await refresh();
     toast(`${p.name} ${p.is_committee ? 'removed from' : 'added to'} the Committee`);
+  });
+  const deletePlayerBtn = document.getElementById('deletePlayerBtn');
+  if(deletePlayerBtn) deletePlayerBtn.addEventListener('click', async ()=>{
+    if(!confirm(`Remove ${p.name} from the team? This deletes their fine history, court cases, and votes. This cannot be undone.`)) return;
+    if(!confirm(`Last check — are you sure you want to permanently remove ${p.name}?`)) return;
+    const { error } = await sb.from('players').delete().eq('id', p.id);
+    if(error){ toast('Could not remove that player: ' + error.message); return; }
+    closeModal(); await refresh();
+    toast(`${p.name} has been removed from the team`);
   });
 }
 
