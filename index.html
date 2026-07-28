@@ -24,8 +24,8 @@
     --ink-700:#3a4a43;
     --ink-500:#6b7b74;
     --line:#e3e9e4;
-    --bg:#f6f7f5;
-    --card:#ffffff;
+    --bg:#faf5ec;
+    --card:linear-gradient(160deg,var(--green-700),var(--green-900) 70%);
     --radius:20px;
     --shadow:0 4px 16px rgba(1,53,46,0.1);
     font-size:17.5px;
@@ -92,10 +92,24 @@
   .stat-tile{
     background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px;
   }
-  .stat-tile .label{font-size:13px;color:var(--ink-500);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .stat-tile .label{font-size:13px;color:rgba(255,255,255,0.7);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
   .stat-tile .value{font-size:27px;font-weight:800;margin-top:6px;}
-  .stat-tile.good .value{color:var(--green-600);}
-  .stat-tile.bad .value{color:var(--red-500);}
+  .stat-tile.good .value{color:var(--gold-400);}
+  .stat-tile.bad .value{color:#ff9d9a;}
+
+  /* ---------- Shared "gold palette" card treatment ----------
+     All the main boxes (cards, stat tiles, list groups, the outstanding %
+     tile and verdict cards) now share the same dark-green gradient look as
+     the hero "Total Collected" tile, with white text for legibility. The
+     "Wanted" poster styling is a deliberately distinct parchment novelty
+     look and is excluded from this treatment. */
+  .card,.stat-tile,.list-card,.pct-tile,.verdict-card{ color:#fff; }
+  .card .muted,.stat-tile .muted,.list-card .muted,.pct-tile .muted,.verdict-card .muted,.poll-card .muted{ color:rgba(255,255,255,0.75); }
+  .card .name,.stat-tile .name,.list-card .name,.pct-tile .name,.verdict-card .name{ color:#fff; }
+  .card label.field-label,.list-card label.field-label{ color:rgba(255,255,255,0.85); }
+  .card .upload-tile,.list-card .upload-tile{ color:rgba(255,255,255,0.75); border-color:rgba(255,255,255,0.35); }
+  .card .divider,.list-card .divider,.pct-tile .divider,.verdict-card .divider{ background:rgba(255,255,255,0.18); }
+  .card .empty,.list-card .empty,.stat-tile .empty,.pct-tile .empty{ color:rgba(255,255,255,0.7); }
 
   /* ---------- Grouped list rows (fines catalogue etc) ---------- */
   .list-card{
@@ -103,28 +117,28 @@
   }
   .list-row{
     display:flex; align-items:center; gap:14px; padding:16px 18px;
-    border-bottom:1px solid var(--line); cursor:pointer; transition:background .12s ease;
+    border-bottom:1px solid rgba(255,255,255,0.14); cursor:pointer; transition:background .12s ease;
   }
   .list-row:last-child{border-bottom:none;}
-  .list-row:active{background:var(--bg);}
+  .list-row:active{background:rgba(255,255,255,0.08);}
   .list-icon{
     width:44px;height:44px;border-radius:13px;flex-shrink:0;
-    background:linear-gradient(135deg,var(--green-600),var(--green-700)); color:#fff;
+    background:rgba(255,255,255,0.15); color:var(--gold-400);
     display:flex;align-items:center;justify-content:center;
   }
   .list-icon svg{width:21px;height:21px;}
   .list-icon.gold{background:linear-gradient(135deg,var(--gold-500),var(--gold-600)); color:var(--green-900);}
   .list-row .lbl{flex:1;min-width:0;}
   .list-row .lbl .title{font-weight:700;font-size:17px;}
-  .list-row .lbl .sub{font-size:13.5px;color:var(--ink-500);margin-top:3px;}
-  .price-tag{font-weight:800;color:var(--green-700);font-size:17.5px;white-space:nowrap;}
-  .price-tag.doubled{color:var(--red-500);}
+  .list-row .lbl .sub{font-size:13.5px;color:rgba(255,255,255,0.75);margin-top:3px;}
+  .price-tag{font-weight:800;color:var(--gold-400);font-size:17.5px;white-space:nowrap;}
+  .price-tag.doubled{color:#ff9d9a;}
   .icon-btn{
-    width:38px;height:38px;border-radius:11px;background:var(--bg);border:none;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;color:var(--ink-700);cursor:pointer;
+    width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,0.15);border:none;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;
     transition:background .12s ease;
   }
-  .icon-btn:active{background:var(--line);}
+  .icon-btn:active{background:rgba(255,255,255,0.25);}
   .icon-btn svg{width:17px;height:17px;}
 
   .double-bubble-card{transition:box-shadow .2s ease, border-color .2s ease; border:1.5px solid transparent;}
@@ -150,17 +164,17 @@
     border-left:5px solid var(--ink-500);
   }
   .verdict-card.guilty{border-left-color:var(--red-500);}
-  .verdict-card.not-guilty{border-left-color:var(--green-600);}
+  .verdict-card.not-guilty{border-left-color:var(--gold-500);}
   .verdict-gavel{
-    width:42px;height:42px;border-radius:12px;background:var(--bg);display:flex;align-items:center;justify-content:center;
-    flex-shrink:0;color:var(--ink-700);
+    width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;color:var(--gold-400);
   }
   .verdict-gavel svg{width:20px;height:20px;}
   .verdict-headline{font-size:15.5px;line-height:1.45;}
   .verdict-tag{font-weight:900;padding:2px 9px;border-radius:6px;font-size:13px;}
   .verdict-card.guilty .verdict-tag{background:var(--red-100);color:var(--red-500);}
   .verdict-card.not-guilty .verdict-tag{background:#e2f5ea;color:var(--green-600);}
-  .verdict-sub{font-size:13px;color:var(--ink-500);margin-top:5px;font-style:italic;}
+  .verdict-sub{font-size:13px;color:rgba(255,255,255,0.75);margin-top:5px;font-style:italic;}
 
   .case-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
   .case-status-pill{font-weight:800;font-size:12px;padding:5px 11px;border-radius:999px;background:var(--bg);color:var(--ink-700);white-space:nowrap;}
@@ -336,7 +350,7 @@
 
   /* ---------- "Add to Home Screen" install banner ---------- */
   .install-banner{
-    display:flex; align-items:center; gap:11px; background:var(--card);
+    display:flex; align-items:center; gap:11px; background:#ffffff; color:var(--ink-900);
     border-bottom:1px solid var(--line); padding:12px 14px; box-shadow:0 2px 8px rgba(1,53,46,0.06);
   }
   .install-banner-icon{
@@ -387,14 +401,14 @@
   }
   .pct-ring{
     width:64px;height:64px;border-radius:50%;flex-shrink:0;
-    background:conic-gradient(var(--red-500) calc(var(--pct)*1%), #e9eee9 0);
+    background:conic-gradient(var(--gold-400) calc(var(--pct)*1%), rgba(255,255,255,0.18) 0);
     display:flex;align-items:center;justify-content:center;
   }
   .pct-ring-inner{
-    width:49px;height:49px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;
-    font-size:13.5px;font-weight:800;color:var(--red-500);
+    width:49px;height:49px;border-radius:50%;background:var(--green-900);display:flex;align-items:center;justify-content:center;
+    font-size:13.5px;font-weight:800;color:var(--gold-400);
   }
-  .pct-tile .pct-label{font-size:12.5px;color:var(--ink-500);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+  .pct-tile .pct-label{font-size:12.5px;color:rgba(255,255,255,0.7);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
   .pct-tile .pct-detail{font-size:14.5px;font-weight:700;margin-top:3px;}
 
   .wanted-wrap{margin-bottom:6px;}
@@ -440,47 +454,72 @@
   .wanted-poster.compact .wanted-for{font-size:9.5px;margin-bottom:8px;line-height:1.3;min-height:24px;}
   .wanted-poster.compact .wanted-bounty{font-size:12px;padding:4px 9px;}
 
-  /* ---------- Admin theme — white/light, distinct from the player's green ---------- */
-  #root.role-admin{ --bg:#ffffff; --card:#ffffff; --line:#e8e8e8; --shadow:0 3px 14px rgba(20,20,20,0.06); }
-  #root.role-admin .topbar{
-    background:#ffffff; color:var(--ink-900); box-shadow:none; border-bottom:1px solid var(--line);
+  /* ---------- Announcements — same "hero" style as Total Collected, but red ---------- */
+  .announcement-card{
+    background:linear-gradient(160deg,var(--red-500),#a83c39 70%);
+    border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; color:#fff;
+    box-shadow:0 10px 24px rgba(168,60,57,0.28); position:relative; overflow:hidden;
+    border:1px solid rgba(255,255,255,0.18);
   }
-  #root.role-admin .team-name{color:var(--ink-900);}
-  #root.role-admin .team-sub{color:var(--ink-500); opacity:1;}
-  #root.role-admin .crest{border-color:var(--line); background:var(--ink-900); color:var(--gold-500);}
-  #root.role-admin .role-switch{background:#f1f1ee;}
-  #root.role-admin .role-switch button{color:var(--ink-700);}
-  #root.role-admin .role-switch button.active{background:var(--ink-900); color:#fff;}
+  .announcement-card .muted{color:rgba(255,255,255,0.8);}
+
+  /* ---------- Serial Offender ---------- */
+  .serial-offender-card{
+    display:flex; align-items:center; gap:14px;
+  }
+  .serial-offender-card .badge{
+    width:50px;height:50px;border-radius:14px;flex-shrink:0;background:rgba(255,255,255,0.15);
+    display:flex;align-items:center;justify-content:center;font-size:24px;
+  }
+  .serial-offender-card .so-label{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--gold-400);}
+  .serial-offender-card .so-name{font-size:17px;font-weight:800;margin-top:2px;}
+  .serial-offender-card .so-count{font-size:13.5px;color:rgba(255,255,255,0.8);margin-top:2px;}
+
+  /* ---------- Events: suggestions + polls ---------- */
+  .suggestion-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.14);}
+  .suggestion-row:last-child{border-bottom:none;}
+  .suggestion-row .who{font-size:12px;font-weight:800;color:var(--gold-400);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px;}
+  .suggestion-row .txt{font-size:14.5px;line-height:1.4;}
+
+  .poll-card{
+    background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; margin-bottom:14px; color:#fff;
+  }
+  .poll-card.closed{opacity:.85;}
+  .poll-question{font-size:16.5px;font-weight:800;margin-bottom:12px;}
+  .poll-option{
+    display:block; width:100%; background:rgba(255,255,255,0.1); border:1.5px solid rgba(255,255,255,0.18);
+    border-radius:12px; padding:10px 12px; margin-bottom:8px; cursor:pointer; text-align:left; color:#fff; font-family:inherit;
+    position:relative; overflow:hidden;
+  }
+  .poll-option:last-child{margin-bottom:0;}
+  .poll-option.voted{border-color:var(--gold-400);}
+  .poll-option[disabled], .poll-option.no-vote{cursor:default;}
+  .poll-option-row{display:flex;align-items:center;justify-content:space-between;gap:8px;position:relative;z-index:1;}
+  .poll-option-label{font-size:14.5px;font-weight:700;}
+  .poll-option-pct{font-size:13px;font-weight:800;color:var(--gold-400);white-space:nowrap;}
+  .poll-bar{height:6px;border-radius:999px;background:rgba(255,255,255,0.15);margin-top:8px;overflow:hidden;position:relative;z-index:1;}
+  .poll-bar-fill{height:100%;background:var(--gold-400);border-radius:999px;transition:width .25s ease;}
+  .poll-votes-count{font-size:11.5px;color:rgba(255,255,255,0.65);margin-top:3px;position:relative;z-index:1;}
+  .poll-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;}
+
+  /* ---------- Admin theme — green-themed, distinct from the plain player background,
+     with the same dark-green cards. The "Total Collected" hero tile is flipped to gold
+     here so it pops out as the one thing admins should notice first. ---------- */
+  #root.role-admin{ --bg:#eef6f2; --shadow:0 3px 14px rgba(20,20,20,0.06); }
   #root.role-admin main{background:var(--bg);}
   #root.role-admin .hero-collected{
-    background:#ffffff; color:var(--ink-900); border:1.5px solid var(--line); box-shadow:var(--shadow);
+    background:linear-gradient(160deg,var(--gold-400),var(--gold-600) 70%); color:var(--green-900);
   }
-  #root.role-admin .hero-collected::before{opacity:.05; filter:grayscale(1);}
-  #root.role-admin .hero-collected .label{color:var(--green-700);}
-  #root.role-admin .hero-collected .value{color:var(--ink-900); text-shadow:none;}
-  #root.role-admin .hero-collected .sub{color:var(--ink-500);}
-  #root.role-admin .list-icon{background:var(--ink-900); color:var(--gold-500);}
-  #root.role-admin .list-icon.gold{background:var(--gold-500); color:var(--ink-900);}
-  #root.role-admin .btn-primary{background:var(--ink-900); color:#fff;}
-  #root.role-admin .btn-primary:active{background:#000;}
-  #root.role-admin .btn-outline{color:var(--ink-900); border-color:var(--ink-700);}
-  #root.role-admin .fab{background:var(--ink-900); box-shadow:0 6px 18px rgba(0,0,0,0.28);}
-  #root.role-admin .section-title{color:var(--ink-700);}
+  #root.role-admin .hero-collected::before{opacity:.12;}
+  #root.role-admin .hero-collected .label{color:var(--green-900); opacity:.75;}
+  #root.role-admin .hero-collected .value{color:var(--green-900); text-shadow:none;}
+  #root.role-admin .hero-collected .sub{color:var(--green-900); opacity:.75;}
+  #root.role-admin .fab{background:var(--green-700); box-shadow:0 6px 18px rgba(1,53,46,0.32);}
+  #root.role-admin .section-title{color:var(--green-700);}
   #root.role-admin nav.bottom-nav{background:#ffffff;}
-  #root.role-admin nav.bottom-nav button.active{color:var(--ink-900);}
-  #root.role-admin nav.bottom-nav button.active .ic{background:#f1f1ee;}
+  #root.role-admin nav.bottom-nav button.active{color:var(--green-700);}
+  #root.role-admin nav.bottom-nav button.active .ic{background:#e2f5ea;}
   #root.role-admin .double-bubble-card.is-on{border-color:var(--gold-500); box-shadow:0 4px 18px rgba(221,186,120,0.35);}
-  #root.role-admin input:checked + .slider{background:var(--ink-900);}
-  #root.role-admin .modal-close{color:var(--ink-700);}
-  #root.role-admin .pct-ring-inner{color:var(--red-500);}
-  #root.role-admin .avatar{background:var(--ink-900); color:var(--gold-500);}
-  #root.role-admin .avatar img{background:#fff;}
-  #root.role-admin .chat-bubble.mine{background:var(--ink-900);}
-  #root.role-admin .verdict-card{border-left-color:var(--ink-500);}
-  #root.role-admin .case-status-pill{background:#f1f1ee;}
-  #root.role-admin .install-banner-btn{background:var(--ink-900);}
-  #root.role-admin .install-banner-icon{color:var(--ink-900);}
-  #root.role-admin .install-step-num{background:var(--ink-900);}
 
   /* ---------- Auth screen ---------- */
   .auth-wrap{
