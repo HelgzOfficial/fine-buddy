@@ -128,6 +128,8 @@ const ICONS = {
   court: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="5" y1="10" x2="5" y2="19"/><line x1="9" y1="10" x2="9" y2="19"/><line x1="15" y1="10" x2="15" y2="19"/><line x1="19" y1="10" x2="19" y2="19"/><line x1="3" y1="21" x2="21" y2="21"/></svg>`,
   gavelSm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 7l-3 7a3 3 0 0 0 6 0z"/><path d="M19 7l-3 7a3 3 0 0 0 6 0z"/><line x1="8" y1="21" x2="16" y2="21"/></svg>`,
   calendarSm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/></svg>`,
+  install: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/><path d="M12 6.5v6"/><path d="M9 10l3 3 3-3"/></svg>`,
+  share: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><rect x="4" y="11" width="16" height="10" rx="2"/></svg>`,
 };
 
 /* ---------------- data loading ---------------- */
@@ -154,6 +156,45 @@ async function loadAll(){
 }
 
 async function refresh(){ await loadAll(); render(); }
+
+/* ---------------- "Add to Home Screen" install experience ---------------- */
+// Chrome/Edge/Android fire beforeinstallprompt and let us trigger the native
+// install dialog ourselves. iOS Safari never fires it — there's no
+// programmatic install API there at all — so for iPhone/iPad we show our own
+// step-by-step instructions instead. Either way, once it's running standalone
+// (already added to the home screen) none of this should show up again.
+let deferredInstallPrompt = null;
+function isStandalone(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+function isIOS(){
+  return /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase()) && !window.MSStream;
+}
+function installDismissed(){
+  try{
+    const ts = localStorage.getItem('fb_install_dismissed_at');
+    if(!ts) return false;
+    return (Date.now() - parseInt(ts,10)) < 1000*60*60*24*21; // re-offer after 3 weeks
+  }catch(e){ return false; }
+}
+function dismissInstallBanner(){
+  try{ localStorage.setItem('fb_install_dismissed_at', String(Date.now())); }catch(e){}
+  render();
+}
+function canOfferInstall(){
+  return !isStandalone() && !installDismissed() && (!!deferredInstallPrompt || isIOS());
+}
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  render();
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredInstallPrompt = null;
+  try{ localStorage.setItem('fb_install_dismissed_at', String(Date.now())); }catch(e){}
+  toast('🎉 Fine Buddy installed!');
+  render();
+});
 
 /* ---------------- boot / auth ---------------- */
 function consumeUrlAuthArtifacts(){
@@ -262,8 +303,9 @@ function render(){
     return;
   }
   if(!state.session){
-    root.innerHTML = renderAuthScreen();
+    root.innerHTML = renderInstallBanner() + renderAuthScreen();
     bindAuthEvents();
+    bindInstallBannerEvents();
     return;
   }
   if(!state.me){
@@ -272,11 +314,56 @@ function render(){
   }
   root.innerHTML = `
     ${renderTopbar()}
+    ${renderInstallBanner()}
     <main id="main">${renderView()}</main>
     ${renderFab()}
     ${renderBottomNav()}
   `;
   bindGlobalEvents();
+  bindInstallBannerEvents();
+}
+
+function renderInstallBanner(){
+  if(!canOfferInstall()) return '';
+  return `
+  <div class="install-banner" id="installBanner">
+    <div class="install-banner-icon">${ICONS.install}</div>
+    <div class="install-banner-text">
+      <div class="install-banner-title">Install Fine Buddy</div>
+      <div class="install-banner-sub">One tap from your home screen, just like a real app.</div>
+    </div>
+    <button class="install-banner-btn" id="installBannerBtn">${deferredInstallPrompt ? 'Install' : 'How?'}</button>
+    <button class="install-banner-close" id="installBannerClose" aria-label="Dismiss">✕</button>
+  </div>`;
+}
+function bindInstallBannerEvents(){
+  const btn = document.getElementById('installBannerBtn');
+  if(btn) btn.addEventListener('click', triggerInstall);
+  const closeBtn = document.getElementById('installBannerClose');
+  if(closeBtn) closeBtn.addEventListener('click', dismissInstallBanner);
+}
+async function triggerInstall(){
+  if(deferredInstallPrompt){
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    render();
+  } else if(isIOS()){
+    openInstallInstructionsModal();
+  } else {
+    toast('Open this link in Chrome (Android) or Safari (iPhone), then use the browser menu to "Add to Home Screen".');
+  }
+}
+function openInstallInstructionsModal(){
+  openModal(`
+    <div class="install-steps">
+      <div class="install-step"><div class="install-step-num">1</div><div>Tap the <b>Share</b> icon ${ICONS.share} in Safari's toolbar.</div></div>
+      <div class="install-step"><div class="install-step-num">2</div><div>Scroll down and tap <b>Add to Home Screen</b>.</div></div>
+      <div class="install-step"><div class="install-step-num">3</div><div>Tap <b>Add</b> in the top right — Fine Buddy now has its own icon.</div></div>
+    </div>
+    <button class="btn btn-primary" id="closeInstallStepsBtn" style="margin-top:16px;">Got it</button>
+  `, { title:'📲 Add to Home Screen', center:true });
+  document.getElementById('closeInstallStepsBtn').addEventListener('click', ()=>{ closeModal(); dismissInstallBanner(); });
 }
 
 function renderAuthScreen(){
@@ -677,6 +764,15 @@ function viewPlayerProfile(){
         </div>`).join('') : `<div class="empty">No fines logged yet — nice one.</div>`}
     </div>
     ${ playerOwed(p.id)>0 ? `<button class="btn btn-primary" data-goto="pay">💳 Pay outstanding balance</button>` : '' }
+    ${ !isStandalone() ? `
+    <div class="card" style="margin-top:14px;">
+      <div class="row" style="gap:12px;">
+        <div class="list-icon">${ICONS.install}</div>
+        <div class="lbl"><div class="title">Not installed yet?</div><div class="sub">Add Fine Buddy to your home screen for the full app feel.</div></div>
+      </div>
+      <button class="btn btn-outline" id="profileInstallBtn" style="margin-top:12px;">📲 Install Fine Buddy</button>
+    </div>
+    ` : '' }
     <button class="btn btn-ghost" id="signOutBtn2" style="margin-top:10px;">Sign out</button>
   `;
 }
@@ -826,6 +922,8 @@ function bindGlobalEvents(){
   root.querySelectorAll('[data-open-case]').forEach(el=>el.addEventListener('click', ()=>openCaseModal(el.dataset.openCase)));
   const takeToCourtBtn = document.getElementById('takeToCourtBtn');
   if(takeToCourtBtn) takeToCourtBtn.addEventListener('click', openTakeToCourtModal);
+  const profileInstallBtn = document.getElementById('profileInstallBtn');
+  if(profileInstallBtn) profileInstallBtn.addEventListener('click', triggerInstall);
 
   root.querySelectorAll('[data-del-announce]').forEach(b=>b.addEventListener('click', async ()=>{
     await sb.from('announcements').delete().eq('id', b.dataset.delAnnounce); await refresh();
