@@ -1111,6 +1111,8 @@ function viewTeamSettings(){
     <div class="card">
       <div class="muted" style="margin-bottom:10px;">Permanently deletes every logged fine and resets everyone's "paid this season" total back to £0.00. Your fines catalog, players, events, and announcements are untouched — just the money data gets wiped. Use this once, right before you actually launch, to clear out test entries.</div>
       <button class="btn btn-danger" id="resetFinesBtn">Reset all fines &amp; payments</button>
+      <div class="muted" style="margin:16px 0 10px;">Permanently deletes every Court case, along with its chat messages and votes. Committee members and fines are untouched — just the test disputes get wiped. Use this once, right before you actually launch, to clear out any test cases you opened while trying out Court.</div>
+      <button class="btn btn-danger" id="resetCourtBtn">Reset Court (clear all cases)</button>
     </div>
   `;
 }
@@ -1275,6 +1277,16 @@ function bindGlobalEvents(){
     await sb.from('players').update({ season_paid: 0 }).neq('id', NEVER_A_REAL_ID);
     await refresh();
     toast('All fines and payments have been reset');
+  });
+
+  const resetCourtBtn = document.getElementById('resetCourtBtn');
+  if(resetCourtBtn) resetCourtBtn.addEventListener('click', async ()=>{
+    if(!confirm('This permanently deletes every Court case, chat message, and vote. This cannot be undone. Continue?')) return;
+    if(!confirm('Last check — are you absolutely sure? All Court history will be wiped completely.')) return;
+    const NEVER_A_REAL_ID = '00000000-0000-0000-0000-000000000000';
+    await sb.from('court_cases').delete().neq('id', NEVER_A_REAL_ID);
+    await refresh();
+    toast('Court has been reset — all cases cleared');
   });
 
 }
