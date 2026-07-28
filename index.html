@@ -351,6 +351,42 @@
   .wanted-poster.compact .wanted-for{font-size:9.5px;margin-bottom:8px;line-height:1.3;min-height:24px;}
   .wanted-poster.compact .wanted-bounty{font-size:12px;padding:4px 9px;}
 
+  /* ---------- Admin theme — white/light, distinct from the player's green ---------- */
+  #root.role-admin{ --bg:#ffffff; --card:#ffffff; --line:#e8e8e8; --shadow:0 3px 14px rgba(20,20,20,0.06); }
+  #root.role-admin .topbar{
+    background:#ffffff; color:var(--ink-900); box-shadow:none; border-bottom:1px solid var(--line);
+  }
+  #root.role-admin .team-name{color:var(--ink-900);}
+  #root.role-admin .team-sub{color:var(--ink-500); opacity:1;}
+  #root.role-admin .crest{border-color:var(--line); background:var(--ink-900); color:var(--gold-500);}
+  #root.role-admin .role-switch{background:#f1f1ee;}
+  #root.role-admin .role-switch button{color:var(--ink-700);}
+  #root.role-admin .role-switch button.active{background:var(--ink-900); color:#fff;}
+  #root.role-admin main{background:var(--bg);}
+  #root.role-admin .hero-collected{
+    background:#ffffff; color:var(--ink-900); border:1.5px solid var(--line); box-shadow:var(--shadow);
+  }
+  #root.role-admin .hero-collected::before{opacity:.05; filter:grayscale(1);}
+  #root.role-admin .hero-collected .label{color:var(--green-700);}
+  #root.role-admin .hero-collected .value{color:var(--ink-900); text-shadow:none;}
+  #root.role-admin .hero-collected .sub{color:var(--ink-500);}
+  #root.role-admin .list-icon{background:var(--ink-900); color:var(--gold-500);}
+  #root.role-admin .list-icon.gold{background:var(--gold-500); color:var(--ink-900);}
+  #root.role-admin .btn-primary{background:var(--ink-900); color:#fff;}
+  #root.role-admin .btn-primary:active{background:#000;}
+  #root.role-admin .btn-outline{color:var(--ink-900); border-color:var(--ink-700);}
+  #root.role-admin .fab{background:var(--ink-900); box-shadow:0 6px 18px rgba(0,0,0,0.28);}
+  #root.role-admin .section-title{color:var(--ink-700);}
+  #root.role-admin nav.bottom-nav{background:#ffffff;}
+  #root.role-admin nav.bottom-nav button.active{color:var(--ink-900);}
+  #root.role-admin nav.bottom-nav button.active .ic{background:#f1f1ee;}
+  #root.role-admin .double-bubble-card.is-on{border-color:var(--gold-500); box-shadow:0 4px 18px rgba(221,186,120,0.35);}
+  #root.role-admin input:checked + .slider{background:var(--ink-900);}
+  #root.role-admin .modal-close{color:var(--ink-700);}
+  #root.role-admin .pct-ring-inner{color:var(--red-500);}
+  #root.role-admin .avatar{background:var(--ink-900); color:var(--gold-500);}
+  #root.role-admin .avatar img{background:#fff;}
+
   /* ---------- Auth screen ---------- */
   .auth-wrap{
     min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
