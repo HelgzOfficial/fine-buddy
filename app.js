@@ -198,17 +198,53 @@ async function loadAll(){
 async function refresh(){ await loadAll(); render(); }
 
 /* ---------------- "Add to Home Screen" install experience ---------------- */
-// Chrome/Edge/Android fire beforeinstallprompt and let us trigger the native
-// install dialog ourselves. iOS Safari never fires it — there's no
-// programmatic install API there at all — so for iPhone/iPad we show our own
-// step-by-step instructions instead. Either way, once it's running standalone
+// Chrome/Edge (desktop or Android) fire beforeinstallprompt and let us
+// trigger the native install dialog ourselves. Every other browser/OS combo
+// has no programmatic install API at all, so we detect which one the visitor
+// is actually using and show ONE short, correct set of manual steps for it —
+// see getInstallVariant() below. Either way, once it's running standalone
 // (already added to the home screen) none of this should show up again.
 let deferredInstallPrompt = null;
 function isStandalone(){
   return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
 }
+function uaString(){ return navigator.userAgent.toLowerCase(); }
 function isIOS(){
-  return /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase()) && !window.MSStream;
+  return /iphone|ipad|ipod/.test(uaString()) && !window.MSStream;
+}
+// True Safari — NOT one of the iOS/Android "wrapper" browsers that all
+// report "Safari" in their UA string too (Chrome/Firefox/Edge on iOS are all
+// just skins over WebKit, and Android WebViews often say "Safari" as well).
+function isRealSafari(){
+  const u = uaString();
+  return /safari/.test(u) && !/crios|fxios|edgios|opios|chrome|android/.test(u);
+}
+function isAndroid(){ return /android/.test(uaString()); }
+function isSamsungBrowser(){ return /samsungbrowser/.test(uaString()); }
+// "firefox" also matches iOS Firefox's "fxios" token, which needs the iOS
+// (Safari-only) treatment instead — exclude it here.
+function isFirefox(){ return /firefox/.test(uaString()) && !/fxios/.test(uaString()); }
+function isMac(){ return /macintosh|mac os x/.test(uaString()) && !isIOS(); }
+function isChromeOrEdge(){
+  const u = uaString();
+  return (/chrome/.test(u) || /edg\//.test(u)) && !isSamsungBrowser() && !isAndroid() && !isIOS();
+}
+// One tidy variant name per real-world browser/OS combo we support, so the
+// banner + modal only ever show the ONE set of instructions that actually
+// applies to whoever is looking at the screen right now.
+function getInstallVariant(){
+  if(isStandalone()) return 'standalone';
+  if(!!deferredInstallPrompt) return 'native'; // Chrome/Edge, desktop or Android — real install dialog
+  if(isIOS()) return isRealSafari() ? 'ios-safari' : 'ios-other-browser';
+  if(isAndroid()){
+    if(isSamsungBrowser()) return 'android-samsung';
+    if(isFirefox()) return 'android-firefox';
+    return 'android-other'; // e.g. an in-app browser without beforeinstallprompt
+  }
+  if(isFirefox()) return 'desktop-firefox';
+  if(isMac() && isRealSafari()) return 'desktop-safari';
+  if(isChromeOrEdge()) return 'desktop-chrome-edge'; // prompt hasn't fired (yet) but browser supports it
+  return 'desktop-other';
 }
 function installDismissed(){
   try{
@@ -222,7 +258,7 @@ function dismissInstallBanner(){
   render();
 }
 function canOfferInstall(){
-  return !isStandalone() && !installDismissed() && (!!deferredInstallPrompt || isIOS());
+  return !isStandalone() && !installDismissed();
 }
 window.addEventListener('beforeinstallprompt', (e)=>{
   e.preventDefault();
@@ -235,6 +271,88 @@ window.addEventListener('appinstalled', ()=>{
   toast('🎉 Fine Buddy installed!');
   render();
 });
+
+// Copy shared with signup.html's compact version of the same instructions —
+// keep both in sync if you change the wording here.
+const INSTALL_COPY = {
+  'ios-safari': {
+    banner: 'Install Fine Buddy', sub: 'One tap from your home screen, just like a real app.', btn: 'How?',
+    title: '📲 Add to Home Screen',
+    steps: [
+      `Tap the <b>Share</b> icon ${ICONS.share} in Safari's toolbar.`,
+      'Scroll down and tap <b>Add to Home Screen</b>.',
+      'Tap <b>Add</b> in the top right — Fine Buddy now has its own icon.',
+    ],
+  },
+  'ios-other-browser': {
+    banner: 'Install Fine Buddy', sub: "iOS needs Safari for this — tap “How?” for the 1-step fix.", btn: 'How?',
+    title: '📲 Add to Home Screen',
+    steps: [
+      "iOS only allows adding to the Home Screen from <b>Safari</b> itself — not from this browser.",
+      'Open this same page in Safari (copy the link, or tap ⋯ / ⋮ in your current browser and choose "Open in Safari" if offered).',
+      `Then in Safari: tap <b>Share</b> ${ICONS.share} → <b>Add to Home Screen</b> → <b>Add</b>.`,
+    ],
+  },
+  'android-samsung': {
+    banner: 'Install Fine Buddy', sub: 'Add it to your home screen for the full app feel.', btn: 'How?',
+    title: '📲 Add to Home Screen',
+    steps: [
+      'Tap the <b>menu</b> (☰ or ⋮) in Samsung Internet.',
+      'Tap <b>Add page to</b> → <b>Home screen</b>.',
+      'Confirm the name and tap <b>Add</b> — Fine Buddy now has its own icon.',
+    ],
+  },
+  'android-firefox': {
+    banner: 'Install Fine Buddy', sub: 'Add it to your home screen for the full app feel.', btn: 'How?',
+    title: '📲 Add to Home Screen',
+    steps: [
+      'Tap the <b>⋮</b> menu in Firefox.',
+      'Tap <b>Install</b> (or <b>Add to Home screen</b>, depending on your Firefox version).',
+      'Confirm — Fine Buddy now has its own icon.',
+    ],
+  },
+  'android-other': {
+    banner: 'Install Fine Buddy', sub: 'Add it to your home screen for the full app feel.', btn: 'How?',
+    title: '📲 Add to Home Screen',
+    steps: [
+      'Tap your browser\'s <b>menu</b> button (usually ⋮ or ☰).',
+      'Look for <b>Install app</b> or <b>Add to Home screen</b> and tap it.',
+      'Confirm — Fine Buddy now has its own icon.',
+    ],
+  },
+  'desktop-chrome-edge': {
+    banner: 'Install Fine Buddy', sub: 'Add it as an app on your computer.', btn: 'How?',
+    title: '💻 Install Fine Buddy',
+    steps: [
+      'Look for the <b>install icon</b> (a little ⊕ or monitor-with-arrow) at the right edge of the address bar and click it — or open the <b>⋮</b> menu → <b>Install Fine Buddy…</b>',
+      'Click <b>Install</b> in the popup — Fine Buddy now opens in its own window from your desktop/taskbar/dock.',
+    ],
+  },
+  'desktop-safari': {
+    banner: 'Add Fine Buddy to your Dock', sub: 'Keep it one click away.', btn: 'How?',
+    title: '💻 Add to Dock',
+    steps: [
+      'In Safari\'s menu bar, open <b>File</b> → <b>Add to Dock</b> (or tap the <b>Share</b> icon and choose <b>Add to Dock</b> — the exact wording can vary a little by macOS/Safari version).',
+      'Fine Buddy now has its own icon in the Dock, separate from Safari.',
+    ],
+  },
+  'desktop-firefox': {
+    banner: 'Bookmark Fine Buddy', sub: "Firefox on desktop can't install apps — bookmark it instead.", btn: 'How?',
+    title: '🔖 Bookmark this page',
+    steps: [
+      'Firefox on desktop doesn\'t support installing web apps like this one.',
+      'Press <b>Ctrl+D</b> (Windows/Linux) or <b>Cmd+D</b> (Mac) to bookmark this page instead, so it\'s always one click away.',
+    ],
+  },
+  'desktop-other': {
+    banner: 'Install Fine Buddy', sub: 'Add it as an app, or bookmark it for quick access.', btn: 'How?',
+    title: '💻 Add Fine Buddy',
+    steps: [
+      'Check your browser\'s menu for an <b>Install</b> or <b>Add to Home screen</b> option.',
+      "Don't see one? Bookmark this page instead (usually Ctrl+D / Cmd+D) so it's always one click away.",
+    ],
+  },
+};
 
 /* ---------------- boot / auth ---------------- */
 function consumeUrlAuthArtifacts(){
@@ -378,14 +496,19 @@ function render(){
 
 function renderInstallBanner(){
   if(!canOfferInstall()) return '';
+  const variant = getInstallVariant();
+  const copy = INSTALL_COPY[variant] || INSTALL_COPY['desktop-other'];
+  const label = variant==='native' ? 'Install' : copy.btn;
+  const title = variant==='native' ? 'Install Fine Buddy' : copy.banner;
+  const sub = variant==='native' ? 'One tap from your home screen, just like a real app.' : copy.sub;
   return `
   <div class="install-banner" id="installBanner">
     <div class="install-banner-icon">${ICONS.install}</div>
     <div class="install-banner-text">
-      <div class="install-banner-title">Install Fine Buddy</div>
-      <div class="install-banner-sub">One tap from your home screen, just like a real app.</div>
+      <div class="install-banner-title">${title}</div>
+      <div class="install-banner-sub">${sub}</div>
     </div>
-    <button class="install-banner-btn" id="installBannerBtn">${deferredInstallPrompt ? 'Install' : 'How?'}</button>
+    <button class="install-banner-btn" id="installBannerBtn">${label}</button>
     <button class="install-banner-close" id="installBannerClose" aria-label="Dismiss">✕</button>
   </div>`;
 }
@@ -401,21 +524,19 @@ async function triggerInstall(){
     await deferredInstallPrompt.userChoice;
     deferredInstallPrompt = null;
     render();
-  } else if(isIOS()){
-    openInstallInstructionsModal();
   } else {
-    toast('Open this link in Chrome (Android) or Safari (iPhone), then use the browser menu to "Add to Home Screen".');
+    openInstallInstructionsModal();
   }
 }
 function openInstallInstructionsModal(){
+  const variant = getInstallVariant();
+  const copy = INSTALL_COPY[variant] || INSTALL_COPY['desktop-other'];
   openModal(`
     <div class="install-steps">
-      <div class="install-step"><div class="install-step-num">1</div><div>Tap the <b>Share</b> icon ${ICONS.share} in Safari's toolbar.</div></div>
-      <div class="install-step"><div class="install-step-num">2</div><div>Scroll down and tap <b>Add to Home Screen</b>.</div></div>
-      <div class="install-step"><div class="install-step-num">3</div><div>Tap <b>Add</b> in the top right — Fine Buddy now has its own icon.</div></div>
+      ${copy.steps.map((s,i)=>`<div class="install-step"><div class="install-step-num">${i+1}</div><div>${s}</div></div>`).join('')}
     </div>
     <button class="btn btn-primary" id="closeInstallStepsBtn" style="margin-top:16px;">Got it</button>
-  `, { title:'📲 Add to Home Screen', center:true });
+  `, { title: copy.title, center:true });
   document.getElementById('closeInstallStepsBtn').addEventListener('click', ()=>{ closeModal(); dismissInstallBanner(); });
 }
 
