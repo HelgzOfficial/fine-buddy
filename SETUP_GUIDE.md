@@ -1,4 +1,4 @@
-[SETUP_GUIDE.md](https://github.com/user-attachments/files/30463211/SETUP_GUIDE.md)
+[SETUP_GUIDE.md](https://github.com/user-attachments/files/30463727/SETUP_GUIDE.md)
 # Fine Buddy — Go-Live Guide
 
 Everything in this folder is the real, working app. You don't need to write or understand any code — just follow these steps in order, all done through normal websites in your browser.
@@ -63,6 +63,14 @@ The Events tab now also lets any player suggest a social event, and lets admins 
 
 1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds the Event suggestions/polls tables, so if you already ran an older version of this file, you need to run the new one too. It's always safe to re-run.
 2. That's it — every player now sees a "Suggest an event" box on the Events tab, and admins get a "+ Create a poll" button there too.
+
+## Step 9 — Share a one-tap signup link (`signup.html`)
+
+There's now a second page in this folder, `signup.html`, meant purely for sharing in your team's WhatsApp group. It's a lightweight standalone page — not part of the main app — that shows your crest and team name, lets a player type their email and get a sign-in link, and has its own compact "add to home screen" instructions at the bottom (already tailored to whatever phone/browser they open it on).
+
+1. **Re-run `schema.sql`** in the Supabase SQL Editor (Step 1) — this update adds a new "public read" policy for the `team_info` table (just the team name + crest, nothing sensitive) so this page can show your crest/name before a player has signed in. It's always safe to re-run, and it doesn't remove the existing authenticated-only policy — it just adds an extra, more permissive one alongside it.
+2. Once `signup.html` is uploaded to GitHub and deployed the same way as the rest of the folder (Steps 2–3), its shareable link is simply your app's URL with `/signup.html` on the end — e.g. `https://fine-buddy-yourname.vercel.app/signup.html`.
+3. Paste that link straight into your WhatsApp squad chat. Anyone who taps it sees who it's for, can request their own sign-in link with one tap, and gets told exactly how to add it to their home screen for their specific phone/browser — no separate instructions needed from you.
 
 ## What's deliberately simple in this version
 
