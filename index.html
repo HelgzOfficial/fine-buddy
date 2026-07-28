@@ -294,7 +294,21 @@
     border:none;box-shadow:0 6px 18px rgba(11,110,95,0.45);cursor:pointer;z-index:25;
     display:flex;align-items:center;justify-content:center;
   }
-  @media (max-width:420px){ .fab{ transform:translateX(calc(50vw - 72px)); } }
+  /* Below the app column's own max-width, #root shrinks to fill the viewport,
+     so the fixed-position fab needs to track viewport width instead of the
+     520px column it otherwise assumes. */
+  @media (max-width:519px){ .fab{ transform:translateX(calc(50vw - 72px)); } }
+
+  /* ---------- Tablets & larger screens ----------
+     Same design everywhere (so it looks and works identically for every
+     player), just a slightly wider, more spacious column instead of a
+     narrow phone-width strip marooned in the middle of an iPad screen. */
+  @media (min-width:700px){
+    #root{ max-width:640px; }
+    nav.bottom-nav{ max-width:640px; }
+    .modal{ max-width:640px; }
+    .fab{ transform:translateX(250px); }
+  }
 
   .banner{
     background:linear-gradient(135deg,var(--gold-400),var(--gold-500));color:var(--green-900);
@@ -319,6 +333,34 @@
   .clear-strip-avatars{display:flex;gap:-6px;}
   .clear-strip .avatar.sm{margin-left:-8px;cursor:pointer;}
   .clear-strip .avatar.sm:first-child{margin-left:0;}
+
+  /* ---------- "Add to Home Screen" install banner ---------- */
+  .install-banner{
+    display:flex; align-items:center; gap:11px; background:var(--card);
+    border-bottom:1px solid var(--line); padding:12px 14px; box-shadow:0 2px 8px rgba(1,53,46,0.06);
+  }
+  .install-banner-icon{
+    width:38px;height:38px;border-radius:11px;flex-shrink:0;background:var(--bg);color:var(--green-700);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .install-banner-icon svg{width:19px;height:19px;}
+  .install-banner-text{flex:1;min-width:0;}
+  .install-banner-title{font-weight:800;font-size:14px;}
+  .install-banner-sub{font-size:12px;color:var(--ink-500);margin-top:1px;}
+  .install-banner-btn{
+    border:none;border-radius:10px;background:var(--green-600);color:#fff;font-weight:800;font-size:13px;
+    padding:9px 14px;cursor:pointer;flex-shrink:0;white-space:nowrap;
+  }
+  .install-banner-close{
+    border:none;background:none;color:var(--ink-500);font-size:15px;cursor:pointer;flex-shrink:0;padding:4px;
+  }
+  .install-steps{display:flex;flex-direction:column;gap:14px;}
+  .install-step{display:flex;align-items:flex-start;gap:12px;font-size:14.5px;line-height:1.5;}
+  .install-step-num{
+    width:26px;height:26px;border-radius:50%;background:var(--green-600);color:#fff;font-weight:800;font-size:13px;
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  }
+  .install-step svg{width:16px;height:16px;vertical-align:-3px;display:inline-block;margin:0 2px;}
 
   /* ---------- Gamified dashboard ---------- */
   .hero-collected{
@@ -436,6 +478,9 @@
   #root.role-admin .chat-bubble.mine{background:var(--ink-900);}
   #root.role-admin .verdict-card{border-left-color:var(--ink-500);}
   #root.role-admin .case-status-pill{background:#f1f1ee;}
+  #root.role-admin .install-banner-btn{background:var(--ink-900);}
+  #root.role-admin .install-banner-icon{color:var(--ink-900);}
+  #root.role-admin .install-step-num{background:var(--ink-900);}
 
   /* ---------- Auth screen ---------- */
   .auth-wrap{
