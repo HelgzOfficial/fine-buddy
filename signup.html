@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Join Fine Buddy</title>
+<meta name="theme-color" content="#01352e">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root{
+    --green-900:#01352e;
+    --green-700:#08594f;
+    --green-600:#0b6e5f;
+    --green-500:#128873;
+    --gold-500:#ddba78;
+    --gold-400:#eacea0;
+    --gold-600:#c49e60;
+    --red-500:#e0524f;
+    --ink-900:#12201a;
+    --ink-700:#3a4a43;
+    --ink-500:#6b7b74;
+    --line:#e3e9e4;
+    --bg:#faf5ec;
+    --radius:20px;
+    --shadow:0 4px 16px rgba(1,53,46,0.1);
+    font-size:17.5px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--ink-900);
+    -webkit-tap-highlight-color:transparent;
+    min-height:100vh;
+  }
+  .hero{
+    background:linear-gradient(160deg,var(--green-900),var(--green-700) 70%);
+    padding:calc(env(safe-area-inset-top,0px) + 40px) 20px 46px;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .wrap{
+    max-width:460px; margin:0 auto; padding:0 20px calc(env(safe-area-inset-bottom,0px) + 40px);
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .brand-row{display:flex; align-items:center; gap:14px; margin-bottom:18px;}
+  .app-icon{width:56px;height:56px;border-radius:16px;box-shadow:var(--shadow); flex-shrink:0;}
+  .plus{color:rgba(255,255,255,0.6); font-size:22px; font-weight:800;}
+  .crest{
+    width:56px;height:56px;border-radius:50%;background:var(--gold-500);
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--green-900);
+    font-size:20px;overflow:hidden;flex-shrink:0;border:2px solid rgba(255,255,255,0.6);box-shadow:var(--shadow);
+  }
+  .crest img{width:100%;height:100%;object-fit:cover;}
+  h1.team-name{color:#fff; font-size:25px; font-weight:900; text-align:center; margin:4px 0 2px;}
+  .app-sub{color:rgba(255,255,255,0.8); font-size:14.5px; text-align:center; margin:0;}
+
+  .card{
+    background:#fff; border-radius:var(--radius); box-shadow:0 14px 34px rgba(0,0,0,0.22);
+    padding:24px 22px; width:100%; margin-bottom:18px; margin-top:-30px; position:relative;
+  }
+  .card h2{font-size:18px; margin:0 0 6px; font-weight:800; color:var(--ink-900);}
+  .card p.desc{font-size:14px; color:var(--ink-500); margin:0 0 18px; line-height:1.5;}
+  label.field-label{font-size:13.5px;font-weight:700;color:var(--ink-700);margin:0 0 6px;display:block;}
+  input[type=email]{
+    width:100%;padding:14px 14px;border-radius:12px;border:1.5px solid var(--line);font-size:16px;
+    background:#fff;color:var(--ink-900);font-family:inherit;
+  }
+  .btn{
+    border:none;border-radius:14px;padding:16px 20px;font-weight:800;font-size:17px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    transition:transform .12s ease, filter .12s ease; font-family:inherit;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn:disabled{opacity:.55;cursor:default;}
+  .btn-primary{background:var(--green-600);color:#fff; margin-top:14px;}
+  .btn-primary:active{background:var(--green-700);}
+  .error-msg{color:var(--red-500);font-size:12.5px;margin-top:8px;}
+  small.disclaimer{display:block;color:var(--ink-500);font-size:12px;margin-top:10px;line-height:1.45;}
+  .spinner{width:15px;height:15px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .confirm{text-align:center;}
+  .confirm-icon{font-size:40px;margin-bottom:6px;}
+  .confirm h2{margin-bottom:8px;}
+  .confirm p{color:var(--ink-700); font-size:14.5px; line-height:1.55; margin:0;}
+  .confirm b{color:var(--ink-900);}
+
+  /* ---------- Compact "Add to Home Screen" section ---------- */
+  .install-card{background:#fff; border-radius:var(--radius); box-shadow:0 14px 34px rgba(0,0,0,0.22); padding:20px 22px; width:100%;}
+  .install-card h2{font-size:16px; margin:0 0 10px; font-weight:800; color:var(--ink-900); display:flex; align-items:center; gap:8px;}
+  .install-steps{display:flex;flex-direction:column;gap:12px; margin-top:12px;}
+  .install-step{display:flex;align-items:flex-start;gap:11px;font-size:14px;line-height:1.5; color:var(--ink-700);}
+  .install-step-num{
+    width:24px;height:24px;border-radius:50%;background:var(--green-600);color:#fff;font-weight:800;font-size:12px;
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  }
+  .install-step b{color:var(--ink-900);}
+  .install-note{font-size:13px; color:var(--ink-500); line-height:1.5; margin-top:2px;}
+  .install-card svg{width:15px;height:15px;vertical-align:-2px;display:inline-block;margin:0 1px;}
+
+  footer.tiny{color:var(--ink-500); font-size:12px; text-align:center; margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="brand-row" id="brandRow">
+    <img class="app-icon" src="icon-192.png" alt="Fine Buddy">
+    <span class="plus">+</span>
+    <div class="crest" id="crestSlot">⚽</div>
+  </div>
+  <h1 class="team-name" id="teamNameEl">AFC Whyteleafe</h1>
+  <div class="app-sub">You've been invited to <b>Fine Buddy</b> — your team's fines tracker.</div>
+</div>
+<div class="wrap">
+  <div class="card" id="formCard">
+    <h2>Get your sign-in link</h2>
+    <p class="desc">No app store, no password. Enter your email and we'll send you a link that signs you straight in.</p>
+    <label class="field-label" for="emailInput">Email address</label>
+    <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" inputmode="email">
+    <div class="error-msg" id="errorMsg" style="display:none;"></div>
+    <button class="btn btn-primary" id="sendBtn">Get my sign-in link</button>
+    <small class="disclaimer">First time? An account is created automatically — no separate sign-up step needed.</small>
+  </div>
+
+  <div class="install-card">
+    <h2>📲 <span id="installHeading">How to add this to your home screen</span></h2>
+    <div class="install-steps" id="installSteps"></div>
+  </div>
+
+  <footer class="tiny">Fine Buddy · shared by your team</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- team_info fetch (crest + name), fails gracefully ---------------- */
+  function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function initials(name){ return (name||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
+
+  var sb = null;
+  try{
+    var cfg = window.FINE_BUDDY_CONFIG;
+    if(cfg && window.supabase){
+      // Same client setup as the main app (see app.js) — implicit flow so a
+      // sign-in link works no matter which device/browser opens the email.
+      sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+        auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+    }
+  }catch(e){ sb = null; }
+
+  function loadTeamInfo(){
+    if(!sb) return; // config.js or supabase-js failed to load — keep the static fallback
+    sb.from('team_info').select('name,crest_url').eq('id',1).maybeSingle()
+      .then(function(res){
+        var t = res && res.data;
+        if(!t) return; // fetch failed / no row yet / RLS not updated — static fallback stays as-is
+        if(t.name){
+          document.getElementById('teamNameEl').textContent = t.name;
+        }
+        var crestSlot = document.getElementById('crestSlot');
+        if(t.crest_url){
+          crestSlot.innerHTML = '<img src="' + escapeHtml(t.crest_url) + '" alt="Team crest">';
+        } else if(t.name){
+          crestSlot.textContent = initials(t.name);
+        }
+      })
+      .catch(function(){ /* network/RLS failure — static "AFC Whyteleafe" + icon stays visible */ });
+  }
+  loadTeamInfo();
+
+  /* ---------------- sign-in link ---------------- */
+  var formCard = document.getElementById('formCard');
+  var emailInput = document.getElementById('emailInput');
+  var sendBtn = document.getElementById('sendBtn');
+  var errorMsg = document.getElementById('errorMsg');
+
+  function showError(msg){
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+  }
+
+  async function sendMagicLink(email){
+    if(!sb){
+      showError("Can't reach Fine Buddy right now — please try again in a moment.");
+      return;
+    }
+    errorMsg.style.display = 'none';
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner"></span> Sending…';
+    // Redirect back to the main app (same origin, one folder up from this
+    // page) so the emailed link lands players in the real app, not here.
+    var appUrl = new URL('./index.html', window.location.href).href;
+    const { error } = await sb.auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: appUrl }
+    });
+    if(error){
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Get my sign-in link';
+      showError(error.message);
+      return;
+    }
+    formCard.innerHTML =
+      '<div class="confirm">' +
+        '<div class="confirm-icon">📬</div>' +
+        '<h2>Check your email</h2>' +
+        '<p>We just sent a sign-in link to <b>' + escapeHtml(email) + '</b>. Tap the link on this phone to finish signing in — no password needed.</p>' +
+      '</div>';
+  }
+
+  sendBtn.addEventListener('click', function(){
+    var email = emailInput.value.trim();
+    if(!email) return;
+    sendMagicLink(email);
+  });
+  emailInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') sendBtn.click();
+  });
+
+  /* ---------------- "Add to Home Screen" — one clear variant per visitor ----------------
+     Same detection approach as app.js's install banner (kept in sync by hand
+     since this is a standalone file): work out which single browser/OS combo
+     the visitor is actually using, and show only the steps that apply to them. */
+  var ICON_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><rect x="4" y="11" width="16" height="10" rx="2"/></svg>';
+
+  function uaString(){ return navigator.userAgent.toLowerCase(); }
+  function isStandaloneDisplay(){
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function isIOS(){ return /iphone|ipad|ipod/.test(uaString()) && !window.MSStream; }
+  function isRealSafari(){
+    var u = uaString();
+    return /safari/.test(u) && !/crios|fxios|edgios|opios|chrome|android/.test(u);
+  }
+  function isAndroid(){ return /android/.test(uaString()); }
+  function isSamsungBrowser(){ return /samsungbrowser/.test(uaString()); }
+  function isFirefox(){ return /firefox/.test(uaString()) && !/fxios/.test(uaString()); }
+  function isMac(){ return /macintosh|mac os x/.test(uaString()) && !isIOS(); }
+  function isChromeOrEdge(){
+    var u = uaString();
+    return (/chrome/.test(u) || /edg\//.test(u)) && !isSamsungBrowser() && !isAndroid() && !isIOS();
+  }
+
+  var deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    renderInstallSteps();
+  });
+
+  function getInstallVariant(){
+    if(isStandaloneDisplay()) return 'standalone';
+    if(deferredInstallPrompt) return 'native';
+    if(isIOS()) return isRealSafari() ? 'ios-safari' : 'ios-other-browser';
+    if(isAndroid()){
+      if(isSamsungBrowser()) return 'android-samsung';
+      if(isFirefox()) return 'android-firefox';
+      return 'android-other';
+    }
+    if(isFirefox()) return 'desktop-firefox';
+    if(isMac() && isRealSafari()) return 'desktop-safari';
+    if(isChromeOrEdge()) return 'desktop-chrome-edge';
+    return 'desktop-other';
+  }
+
+  var INSTALL_COPY = {
+    'native': {
+      heading: 'How to add this to your home screen',
+      steps: [ 'Your browser can install Fine Buddy directly — tap <b>Install</b> when prompted, or use the install icon in the address bar.' ],
+    },
+    'ios-safari': {
+      heading: 'How to add this to your home screen',
+      steps: [
+        'Tap the <b>Share</b> icon ' + ICON_SHARE + ' in Safari\'s toolbar.',
+        'Scroll down and tap <b>Add to Home Screen</b>.',
+        'Tap <b>Add</b> in the top right — done.',
+      ],
+    },
+    'ios-other-browser': {
+      heading: 'How to add this to your home screen',
+      steps: [
+        'iOS only allows adding to the Home Screen from <b>Safari</b> — not from this browser.',
+        'Open this page in Safari instead.',
+        'Then tap <b>Share</b> ' + ICON_SHARE + ' → <b>Add to Home Screen</b> → <b>Add</b>.',
+      ],
+    },
+    'android-samsung': {
+      heading: 'How to add this to your home screen',
+      steps: [
+        'Tap the <b>menu</b> (☰ or ⋮) in Samsung Internet.',
+        'Tap <b>Add page to</b> → <b>Home screen</b>.',
+      ],
+    },
+    'android-firefox': {
+      heading: 'How to add this to your home screen',
+      steps: [ 'Tap the <b>⋮</b> menu in Firefox, then tap <b>Install</b> (or <b>Add to Home screen</b>).' ],
+    },
+    'android-other': {
+      heading: 'How to add this to your home screen',
+      steps: [ 'Tap your browser\'s <b>menu</b> button (⋮ or ☰) and look for <b>Install app</b> or <b>Add to Home screen</b>.' ],
+    },
+    'desktop-chrome-edge': {
+      heading: 'How to install this on your computer',
+      steps: [ 'Click the <b>install icon</b> at the right of the address bar (or open the <b>⋮</b> menu → <b>Install Fine Buddy…</b>).' ],
+    },
+    'desktop-safari': {
+      heading: 'How to add this to your Dock',
+      steps: [ 'In Safari\'s menu bar: <b>File</b> → <b>Add to Dock</b> (wording can vary slightly by macOS version).' ],
+    },
+    'desktop-firefox': {
+      heading: 'Bookmark this page',
+      steps: [ 'Firefox on desktop can\'t install web apps — press <b>Ctrl+D</b> / <b>Cmd+D</b> to bookmark this page instead.' ],
+    },
+    'desktop-other': {
+      heading: 'How to add this to your home screen',
+      steps: [ 'Check your browser\'s menu for <b>Install</b> or <b>Add to Home screen</b> — or bookmark this page (Ctrl+D / Cmd+D) for quick access.' ],
+    },
+    'standalone': {
+      heading: 'You\'re all set',
+      steps: [ 'Looks like you already opened this from your home screen — nothing else to do here.' ],
+    },
+  };
+
+  function renderInstallSteps(){
+    var variant = getInstallVariant();
+    var copy = INSTALL_COPY[variant] || INSTALL_COPY['desktop-other'];
+    document.getElementById('installHeading').textContent = copy.heading;
+    document.getElementById('installSteps').innerHTML = copy.steps.map(function(s, i){
+      return '<div class="install-step"><div class="install-step-num">' + (i+1) + '</div><div>' + s + '</div></div>';
+    }).join('');
+  }
+  renderInstallSteps();
+})();
+</script>
+</body>
+</html>
