@@ -34,6 +34,7 @@ const state = {
   ready: false,
   authBusy: false,
   authSentTo: null,
+  authCodeError: null,
 };
 
 /* ---------------- helpers ---------------- */
@@ -518,8 +519,23 @@ async function sendMagicLink(email){
   });
   state.authBusy = false;
   if(error){ state.authError = error.message; }
-  else { state.authError = null; state.authSentTo = email; }
+  else { state.authError = null; state.authSentTo = email; state.authCodeError = null; }
   render();
+}
+
+// Tapping the link in the email always opens Safari, even when you're
+// signed-in-and-requesting from the installed Home Screen icon — iOS has no
+// way to hand that tap back to the icon, so a session started that way never
+// reaches the icon's own storage. Typing the 6-digit code from the same
+// email back into whichever screen you're already on sidesteps that
+// entirely: the whole sign-in happens in one place, so it always lands in
+// the right spot.
+async function verifyEmailCode(email, code){
+  state.authBusy = true; render();
+  const { error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
+  state.authBusy = false;
+  if(error){ state.authCodeError = error.message; render(); }
+  // on success, onAuthStateChange picks up the new session and re-renders.
 }
 
 async function signOut(){ await sb.auth.signOut(); }
@@ -617,8 +633,18 @@ function renderAuthScreen(){
     <div class="auth-wrap">
       <div class="auth-crest">${state.team.crest_url?`<img src="${state.team.crest_url}">`:'⚽'}</div>
       <div class="auth-title">Check your email</div>
-      <div class="auth-sub">We sent a sign-in link to <b>${escapeHtml(state.authSentTo)}</b>. Open it on this phone to finish signing in.</div>
+      <div class="auth-sub">We sent a link — and a 6-digit code — to <b>${escapeHtml(state.authSentTo)}</b>.</div>
       <div class="auth-card">
+        <div class="muted" style="text-align:left;margin-bottom:8px;">Fastest way in: tap the link in the email.</div>
+        <div class="divider"></div>
+        <label class="field-label" style="text-align:left;">On a Home Screen icon? Type the code instead</label>
+        <input type="text" id="authCodeInput" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="6" style="letter-spacing:4px;font-size:20px;text-align:center;">
+        <small class="disclaimer">Tapping the emailed link always opens Safari, even from an app icon — so on a Home Screen icon, typing the code here instead is what actually signs that icon in. You'll only need to do this once per icon; after that it stays signed in like normal.</small>
+        ${state.authCodeError?`<div style="color:var(--red-500);font-size:12.5px;margin-top:8px;">${escapeHtml(state.authCodeError)}</div>`:''}
+        <button class="btn btn-primary" id="authVerifyCodeBtn" style="margin-top:10px;" ${state.authBusy?'disabled':''}>
+          ${state.authBusy?'<span class="spinner"></span> Checking…':'Verify code'}
+        </button>
+        <div style="height:10px;"></div>
         <button class="btn btn-outline" id="authResendBtn">Use a different email</button>
       </div>
     </div>`;
@@ -647,7 +673,13 @@ function bindAuthEvents(){
     sendMagicLink(email);
   });
   const resendBtn = document.getElementById('authResendBtn');
-  if(resendBtn) resendBtn.addEventListener('click', ()=>{ state.authSentTo=null; render(); });
+  if(resendBtn) resendBtn.addEventListener('click', ()=>{ state.authSentTo=null; state.authCodeError=null; render(); });
+  const verifyBtn = document.getElementById('authVerifyCodeBtn');
+  if(verifyBtn) verifyBtn.addEventListener('click', ()=>{
+    const code = document.getElementById('authCodeInput').value.trim();
+    if(!code) return;
+    verifyEmailCode(state.authSentTo, code);
+  });
 }
 
 function renderTopbar(){
