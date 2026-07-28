@@ -267,23 +267,23 @@
   nav.bottom-nav{
     position:fixed; bottom:0; left:50%; transform:translateX(-50%);
     width:100%; max-width:520px;
-    background:#fff; border-top:1px solid var(--line);
+    background:linear-gradient(180deg,var(--gold-400),var(--gold-500)); border-top:1px solid var(--gold-600);
     display:flex; padding:8px 4px calc(env(safe-area-inset-bottom,0px) + 8px);
-    box-shadow:0 -2px 14px rgba(0,0,0,0.07); z-index:30;
+    box-shadow:0 -2px 14px rgba(0,0,0,0.12); z-index:30;
   }
   nav.bottom-nav button{
     flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;
-    padding:6px 2px;cursor:pointer;color:var(--ink-500);font-size:12px;font-weight:700;
+    padding:6px 2px;cursor:pointer;color:var(--green-700);font-size:12px;font-weight:700;
     transition:color .15s ease;
   }
   nav.bottom-nav button .ic{
     position:relative; width:40px;height:27px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-    transition:background .15s ease, transform .12s ease;
+    transition:background .15s ease, transform .12s ease; color:var(--green-700);
   }
   nav.bottom-nav button .ic svg{width:22px;height:22px;}
   nav.bottom-nav button:active .ic{transform:scale(0.88);}
-  nav.bottom-nav button.active{color:var(--green-600);}
-  nav.bottom-nav button.active .ic{background:#e2f5ea;}
+  nav.bottom-nav button.active{color:var(--green-900);}
+  nav.bottom-nav button.active .ic{background:rgba(1,53,46,0.14);}
 
   .modal-backdrop{
     position:fixed;inset:0;background:rgba(1,53,46,0.6);z-index:100;
@@ -378,22 +378,21 @@
 
   /* ---------- Gamified dashboard ---------- */
   .hero-collected{
-    background:linear-gradient(160deg,var(--green-700),var(--green-900) 70%);
-    border-radius:24px; padding:26px 20px 22px; margin-bottom:14px; text-align:center; color:#fff;
-    box-shadow:0 10px 28px rgba(1,53,46,0.32); position:relative; overflow:hidden;
-    border:1px solid rgba(221,186,120,0.25);
+    background:linear-gradient(160deg,var(--gold-400),var(--gold-600) 70%); color:var(--green-900);
+    border-radius:24px; padding:26px 20px 22px; margin-bottom:14px; text-align:center;
+    box-shadow:0 10px 28px rgba(180,140,60,0.35); position:relative; overflow:hidden;
+    border:1px solid rgba(1,53,46,0.15);
   }
   .hero-collected::before{
-    content:"💰"; position:absolute; font-size:130px; opacity:.09; right:-20px; top:-24px; transform:rotate(-12deg);
+    content:"💰"; position:absolute; font-size:130px; opacity:.12; right:-20px; top:-24px; transform:rotate(-12deg);
   }
   .hero-collected .label{
-    font-size:13.5px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--gold-400); position:relative;
+    font-size:13.5px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--green-900); opacity:.75; position:relative;
   }
   .hero-collected .value{
-    font-size:52px; font-weight:900; letter-spacing:-1px; margin:8px 0 3px; position:relative;
-    text-shadow:0 2px 10px rgba(0,0,0,0.25);
+    font-size:52px; font-weight:900; letter-spacing:-1px; margin:8px 0 3px; position:relative; color:var(--green-900);
   }
-  .hero-collected .sub{font-size:13px; opacity:.85; position:relative;}
+  .hero-collected .sub{font-size:13px; opacity:.75; position:relative; color:var(--green-900);}
 
   .pct-tile{
     background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px; margin-bottom:14px;
@@ -454,14 +453,23 @@
   .wanted-poster.compact .wanted-for{font-size:9.5px;margin-bottom:8px;line-height:1.3;min-height:24px;}
   .wanted-poster.compact .wanted-bounty{font-size:12px;padding:4px 9px;}
 
-  /* ---------- Announcements — same "hero" style as Total Collected, but red ---------- */
+  /* ---------- Announcements — same "hero" style as Total Collected, but red,
+     with a bit more lift/scale than a plain card so it pops out ---------- */
   .announcement-card{
     background:linear-gradient(160deg,var(--red-500),#a83c39 70%);
-    border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; color:#fff;
-    box-shadow:0 10px 24px rgba(168,60,57,0.28); position:relative; overflow:hidden;
-    border:1px solid rgba(255,255,255,0.18);
+    border-radius:var(--radius); padding:18px 20px; margin-bottom:16px; color:#fff;
+    box-shadow:0 14px 30px rgba(168,60,57,0.42); position:relative; overflow:hidden;
+    border:1.5px solid rgba(255,255,255,0.28);
+    transform:scale(1.015);
   }
   .announcement-card .muted{color:rgba(255,255,255,0.8);}
+
+  /* ---------- Event countdown card (dashboard) ---------- */
+  .event-countdown-card{cursor:pointer;}
+  .event-countdown-card .ec-label{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--gold-400);}
+  .event-countdown-card .ec-title{font-size:17px;font-weight:800;margin-top:4px;}
+  .event-countdown-card .ec-date{font-size:13px;color:rgba(255,255,255,0.75);font-weight:700;}
+  .event-countdown-card .ec-countdown{font-size:13.5px;font-weight:800;color:var(--gold-400);}
 
   /* ---------- Serial Offender ---------- */
   .serial-offender-card{
@@ -502,23 +510,13 @@
   .poll-votes-count{font-size:11.5px;color:rgba(255,255,255,0.65);margin-top:3px;position:relative;z-index:1;}
   .poll-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;}
 
-  /* ---------- Admin theme — green-themed, distinct from the plain player background,
-     with the same dark-green cards. The "Total Collected" hero tile is flipped to gold
-     here so it pops out as the one thing admins should notice first. ---------- */
+  /* ---------- Admin theme — same green-themed cards and gold "Total Collected"
+     hero tile as the player side now uses, just a slightly different pale
+     background tint so admins can tell the two roles apart at a glance. ---------- */
   #root.role-admin{ --bg:#eef6f2; --shadow:0 3px 14px rgba(20,20,20,0.06); }
   #root.role-admin main{background:var(--bg);}
-  #root.role-admin .hero-collected{
-    background:linear-gradient(160deg,var(--gold-400),var(--gold-600) 70%); color:var(--green-900);
-  }
-  #root.role-admin .hero-collected::before{opacity:.12;}
-  #root.role-admin .hero-collected .label{color:var(--green-900); opacity:.75;}
-  #root.role-admin .hero-collected .value{color:var(--green-900); text-shadow:none;}
-  #root.role-admin .hero-collected .sub{color:var(--green-900); opacity:.75;}
   #root.role-admin .fab{background:var(--green-700); box-shadow:0 6px 18px rgba(1,53,46,0.32);}
   #root.role-admin .section-title{color:var(--green-700);}
-  #root.role-admin nav.bottom-nav{background:#ffffff;}
-  #root.role-admin nav.bottom-nav button.active{color:var(--green-700);}
-  #root.role-admin nav.bottom-nav button.active .ic{background:#e2f5ea;}
   #root.role-admin .double-bubble-card.is-on{border-color:var(--gold-500); box-shadow:0 4px 18px rgba(221,186,120,0.35);}
 
   /* ---------- Auth screen ---------- */
