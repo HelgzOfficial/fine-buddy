@@ -206,6 +206,10 @@ const root = document.getElementById('root');
 let modalNode = null;
 
 function render(){
+  // Admin gets a distinct white/light theme so it's never mistaken for the
+  // player-facing green/gold experience, even mid-session when switching
+  // between "view as player" and the real admin tools.
+  root.className = effectiveRole()==='admin' ? 'role-admin' : 'role-player';
   if(!state.ready){
     root.innerHTML = `<div class="loading-screen"><div class="spinner" style="width:28px;height:28px;border-width:3px;"></div><div>Loading Fine Buddy…</div></div>`;
     return;
