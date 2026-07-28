@@ -28,6 +28,9 @@ const state = {
   events: [],
   courtCases: [],
   courtVotes: [],
+  eventSuggestions: [],
+  eventPolls: [],
+  eventPollVotes: [],
   ready: false,
   authBusy: false,
   authSentTo: null,
@@ -123,6 +126,29 @@ function mostLoggedFine(){
   const [label, count] = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
   return { label, count };
 }
+function fineCountFor(playerId){ return logsFor(playerId).length; }
+function serialOffender(){
+  if(!state.players.length) return null;
+  const ranked = state.players.slice().sort((a,b)=>fineCountFor(b.id)-fineCountFor(a.id));
+  const top = ranked[0];
+  if(!top || fineCountFor(top.id)<=0) return null;
+  return top;
+}
+
+/* ---------------- events: suggestions + polls helpers ---------------- */
+function votesForPoll(pollId){ return state.eventPollVotes.filter(v=>v.poll_id===pollId); }
+function myPollVoteFor(pollId){
+  if(!state.me) return null;
+  return votesForPoll(pollId).find(v=>v.voter_id===state.me.id) || null;
+}
+function tallyPoll(options, votes){
+  const total = votes.length;
+  return options.map((label, i)=>{
+    const count = votes.filter(v=>v.option_index===i).length;
+    const pct = total ? Math.round((count/total)*100) : 0;
+    return { label, count, pct };
+  });
+}
 
 /* ---------------- icon set (inline SVG, currentColor so they follow theme) ---------------- */
 const ICONS = {
@@ -142,7 +168,7 @@ const ICONS = {
 
 /* ---------------- data loading ---------------- */
 async function loadAll(){
-  const [teamRes, playersRes, finesRes, logRes, annRes, evRes, courtCasesRes, courtVotesRes] = await Promise.all([
+  const [teamRes, playersRes, finesRes, logRes, annRes, evRes, courtCasesRes, courtVotesRes, suggRes, pollsRes, pollVotesRes] = await Promise.all([
     sb.from('team_info').select('*').eq('id',1).maybeSingle(),
     sb.from('players').select('*').order('created_at'),
     sb.from('fines').select('*').order('created_at'),
@@ -151,6 +177,9 @@ async function loadAll(){
     sb.from('events').select('*').order('date'),
     sb.from('court_cases').select('*').order('created_at',{ascending:false}),
     sb.from('court_votes').select('*'),
+    sb.from('event_suggestions').select('*').order('created_at',{ascending:false}),
+    sb.from('event_polls').select('*').order('created_at',{ascending:false}),
+    sb.from('event_poll_votes').select('*'),
   ]);
   if(teamRes.data) state.team = teamRes.data;
   state.players = playersRes.data || [];
@@ -160,6 +189,9 @@ async function loadAll(){
   state.events = evRes.data || [];
   state.courtCases = courtCasesRes.data || [];
   state.courtVotes = courtVotesRes.data || [];
+  state.eventSuggestions = suggRes.data || [];
+  state.eventPolls = pollsRes.data || [];
+  state.eventPollVotes = pollVotesRes.data || [];
   state.me = state.players.find(p=>p.id === state.session.user.id) || null;
 }
 
@@ -502,6 +534,7 @@ function viewDashboard(){
   const myCase = state.me ? myOpenCourtCase() : null;
   const latestVerdict = resolvedCourtCases()[0];
   const pendingForMe = openCasesNeedingMyVote();
+  const offender = serialOffender();
   return `
     <h1 class="page-title">Dashboard</h1>
     ${ clear.length ? `
@@ -516,6 +549,16 @@ function viewDashboard(){
     </div>
     ` : '' }
     ${ latestVerdict ? renderVerdictCard(latestVerdict) : '' }
+    ${ offender ? `
+    <div class="card serial-offender-card" data-player-click="${offender.id}">
+      <div class="badge">🎯</div>
+      <div>
+        <div class="so-label">Serial Offender</div>
+        <div class="so-name">${escapeHtml(offender.name)}</div>
+        <div class="so-count">${fineCountFor(offender.id)} fine${fineCountFor(offender.id)===1?'':'s'} logged this season</div>
+      </div>
+    </div>
+    ` : '' }
     <div class="hero-collected">
       <div class="label">🏆 Total Collected This Season</div>
       <div class="value">${fmt(totalCollected())}</div>
@@ -564,8 +607,8 @@ function viewDashboard(){
 
     <div class="section-title">Announcements</div>
     ${state.announcements.slice().reverse().map(a=>`
-      <div class="card">
-        <div class="row between"><div class="muted">${a.date}</div>${isAdmin()?`<button class="link-btn" data-del-announce="${a.id}">Delete</button>`:''}</div>
+      <div class="announcement-card">
+        <div class="row between"><div class="muted">${a.date}</div>${isAdmin()?`<button class="link-btn" style="color:#fff;" data-del-announce="${a.id}">Delete</button>`:''}</div>
         <div style="margin-top:6px;font-size:14.5px;">${escapeHtml(a.text)}</div>
       </div>
     `).join('') || `<div class="empty">No announcements yet.</div>`}
@@ -809,7 +852,7 @@ function viewPay(){
     <h1 class="page-title">Pay Fines</h1>
     <div class="card">
       <div class="muted">Amount due</div>
-      <div style="font-size:30px;font-weight:800;color:${owed>0?'var(--red-500)':'var(--green-600)'};margin-top:2px;">${fmt(owed)}</div>
+      <div style="font-size:30px;font-weight:800;color:${owed>0?'#ff9d9a':'var(--gold-400)'};margin-top:2px;">${fmt(owed)}</div>
     </div>
     ${ (paypalUrl || monzoUrl) ? `
     <div class="section-title">Pay instantly</div>
@@ -819,20 +862,52 @@ function viewPay(){
       ${monzoUrl ? `<a class="btn monzo-btn" href="${monzoUrl}" target="_blank" rel="noopener">Pay ${fmt(owed)} with Monzo</a>` : ''}
       <small class="disclaimer">Opens the app with the amount already filled in. Once you've paid, your admin will confirm it and your balance will clear.</small>
     </div>` : isAdmin() ? `<div class="banner">Add a PayPal.me or Monzo.me link in Team Settings to enable instant payments here.</div>` : `<div class="banner">Ask your admin to add a PayPal or Monzo link in Team Settings for instant one-tap payments.</div>`}
-    <div class="section-title">Bank transfer</div>
+    <div class="section-title">No Monzo? Bank transfer instead</div>
     <div class="card">
+      <div class="muted">Amount to transfer</div>
+      <div style="font-size:26px;font-weight:800;color:var(--gold-400);margin:2px 0 12px;">${fmt(owed)}</div>
+      <div class="divider"></div>
       <div class="row between"><div class="muted">Account name</div><div class="name">${escapeHtml(t.bank_account_name||'—')}</div></div>
       <div class="row between"><div class="muted">Sort code</div><div class="name">${escapeHtml(t.bank_sort_code||'—')}</div></div>
       <div class="row between"><div class="muted">Account number</div><div class="name">${escapeHtml(t.bank_account_number||'—')}</div></div>
       <div class="row between"><div class="muted">Reference</div><div class="name">${escapeHtml(t.bank_reference||'FINE')}-${p.name.split(' ')[0].toUpperCase()}</div></div>
+      <button class="btn btn-outline" id="copyBankDetailsBtn" style="margin-top:14px;">📋 Copy bank details</button>
+      <small class="disclaimer">Same amount as above — no Monzo needed, just transfer straight to the nominated account and your admin will confirm it.</small>
     </div>
     ${ owed>0 ? `<div class="banner">Once you've paid, your admin confirms it on their end — balances can only be marked as paid by a team admin, to keep the totals trustworthy.</div>` : '' }
   `;
 }
 
 /* ---------------- EVENTS ---------------- */
+function renderPollCard(poll){
+  const votes = votesForPoll(poll.id);
+  const myVote = myPollVoteFor(poll.id);
+  const options = Array.isArray(poll.options) ? poll.options : [];
+  const tally = tallyPoll(options, votes);
+  const canVote = !poll.closed;
+  return `
+    <div class="poll-card ${poll.closed?'closed':''}">
+      <div class="poll-question">${escapeHtml(poll.question)}${poll.closed?' <span class="muted" style="font-size:12px;">(closed)</span>':''}</div>
+      ${tally.map((opt,i)=>`
+        <button class="poll-option ${myVote && myVote.option_index===i?'voted':''}" ${canVote?`data-poll-vote="${poll.id}:${i}"`:'disabled'}>
+          <div class="poll-option-row">
+            <span class="poll-option-label">${myVote && myVote.option_index===i?'✅ ':''}${escapeHtml(opt.label)}</span>
+            <span class="poll-option-pct">${opt.pct}%</span>
+          </div>
+          <div class="poll-bar"><div class="poll-bar-fill" style="width:${opt.pct}%;"></div></div>
+          <div class="poll-votes-count">${opt.count} vote${opt.count===1?'':'s'}</div>
+        </button>
+      `).join('')}
+      <div class="poll-meta">
+        <div class="muted" style="font-size:12px;">${votes.length} total vote${votes.length===1?'':'s'}</div>
+        ${isAdmin() && !poll.closed ? `<button class="link-btn" data-close-poll="${poll.id}">Close poll</button>` : ''}
+      </div>
+    </div>
+  `;
+}
 function viewEvents(){
   const sorted = state.events.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const polls = state.eventPolls.slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   return `
     <h1 class="page-title">Social Calendar</h1>
     <div class="banner">🎉 Funds raised from fines go straight towards these events.</div>
@@ -840,7 +915,7 @@ function viewEvents(){
       <div class="card">
         <div class="row between">
           <div class="name">${escapeHtml(e.title)}</div>
-          ${isAdmin()?`<button class="link-btn" data-del-event="${e.id}">Delete</button>`:''}
+          ${isAdmin()?`<button class="link-btn" style="color:#fff;" data-del-event="${e.id}">Delete</button>`:''}
         </div>
         <div class="muted" style="margin:4px 0 8px;">📅 ${e.date}</div>
         <div style="font-size:14px;">${escapeHtml(e.description||'')}</div>
@@ -848,6 +923,32 @@ function viewEvents(){
         ${e.link?`<a class="btn btn-gold" style="margin-top:12px;" href="${e.link}" target="_blank" rel="noopener">🎟️ View tickets / booking link</a>`:''}
       </div>
     `).join('') : `<div class="empty">No events scheduled yet.</div>` }
+
+    <div class="section-title">Suggest an event</div>
+    <div class="card">
+      <div class="row" style="gap:8px;">
+        <input type="text" id="suggestionInput" placeholder="Got an idea for a social? Type it here…" style="flex:1;">
+        <button class="btn btn-primary btn-sm" id="submitSuggestionBtn">Submit</button>
+      </div>
+      ${ state.eventSuggestions.length ? `
+      <div class="divider"></div>
+      ${state.eventSuggestions.map(s=>{
+        const suggester = getPlayer(s.suggested_by);
+        return `
+        <div class="suggestion-row">
+          <div>
+            <div class="who">${escapeHtml(suggester?suggester.name:'A player')}</div>
+            <div class="txt">${escapeHtml(s.text)}</div>
+          </div>
+          ${isAdmin()?`<button class="link-btn" style="color:#fff;flex-shrink:0;" data-del-suggestion="${s.id}">Delete</button>`:''}
+        </div>`;
+      }).join('')}
+      ` : '' }
+    </div>
+
+    <div class="section-title">Polls</div>
+    ${ polls.length ? polls.map(renderPollCard).join('') : (isAdmin() ? '' : `<div class="empty">No polls yet.</div>`) }
+    ${ isAdmin() ? `<button class="btn btn-outline" id="createPollBtn" style="margin-top:6px;">+ Create a poll</button>` : '' }
   `;
 }
 
@@ -952,6 +1053,45 @@ function bindGlobalEvents(){
   root.querySelectorAll('[data-del-event]').forEach(b=>b.addEventListener('click', async ()=>{
     await sb.from('events').delete().eq('id', b.dataset.delEvent); await refresh();
   }));
+
+  const submitSuggestionBtn = document.getElementById('submitSuggestionBtn');
+  if(submitSuggestionBtn) submitSuggestionBtn.addEventListener('click', async ()=>{
+    const input = document.getElementById('suggestionInput');
+    const text = input.value.trim();
+    if(!text) return;
+    await sb.from('event_suggestions').insert({ text, suggested_by: state.me.id });
+    await refresh();
+    toast('Suggestion added — thanks!');
+  });
+  root.querySelectorAll('[data-del-suggestion]').forEach(b=>b.addEventListener('click', async ()=>{
+    await sb.from('event_suggestions').delete().eq('id', b.dataset.delSuggestion); await refresh();
+  }));
+  root.querySelectorAll('[data-poll-vote]').forEach(b=>b.addEventListener('click', async ()=>{
+    const [pollId, optionIndex] = b.dataset.pollVote.split(':');
+    await sb.from('event_poll_votes').upsert(
+      { poll_id: pollId, voter_id: state.me.id, option_index: parseInt(optionIndex,10) },
+      { onConflict:'poll_id,voter_id' }
+    );
+    await refresh();
+  }));
+  root.querySelectorAll('[data-close-poll]').forEach(b=>b.addEventListener('click', async ()=>{
+    await sb.from('event_polls').update({ closed:true }).eq('id', b.dataset.closePoll); await refresh();
+  }));
+  const createPollBtn = document.getElementById('createPollBtn');
+  if(createPollBtn) createPollBtn.addEventListener('click', openCreatePollModal);
+
+  const copyBankDetailsBtn = document.getElementById('copyBankDetailsBtn');
+  if(copyBankDetailsBtn) copyBankDetailsBtn.addEventListener('click', ()=>{
+    const t = state.team;
+    const p = state.me;
+    const owed = playerOwed(p.id);
+    const ref = `${t.bank_reference||'FINE'}-${p.name.split(' ')[0].toUpperCase()}`;
+    const text = `Amount: ${fmt(owed)}\nAccount name: ${t.bank_account_name||'—'}\nSort code: ${t.bank_sort_code||'—'}\nAccount number: ${t.bank_account_number||'—'}\nReference: ${ref}`;
+    navigator.clipboard?.writeText(text).catch(()=>{});
+    const original = copyBankDetailsBtn.textContent;
+    copyBankDetailsBtn.textContent = 'Copied!';
+    setTimeout(()=>{ copyBankDetailsBtn.textContent = original; }, 1500);
+  });
 
   const dbToggle = document.getElementById('doubleBubbleToggle');
   if(dbToggle) dbToggle.addEventListener('change', async ()=>{
@@ -1367,6 +1507,30 @@ function openEventModal(){
       funds_note: document.getElementById('evFunds').value.trim(),
     });
     closeModal(); await refresh();
+  });
+}
+
+function openCreatePollModal(){
+  openModal(`
+    <label class="field-label">Question</label>
+    <input type="text" id="pollQuestionInput" placeholder="e.g. Where should we do the end-of-season do?">
+    <label class="field-label">Options (leave blank to skip)</label>
+    <input type="text" id="pollOptionInput0" placeholder="Option 1">
+    <input type="text" id="pollOptionInput1" placeholder="Option 2" style="margin-top:8px;">
+    <input type="text" id="pollOptionInput2" placeholder="Option 3 (optional)" style="margin-top:8px;">
+    <input type="text" id="pollOptionInput3" placeholder="Option 4 (optional)" style="margin-top:8px;">
+    <button class="btn btn-primary" id="savePollBtn" style="margin-top:14px;">Create poll</button>
+    <small class="disclaimer">Every player will be able to vote for one option. You can close the poll to lock in the final result whenever you like.</small>
+  `, { title:'New poll' });
+  document.getElementById('savePollBtn').addEventListener('click', async ()=>{
+    const question = document.getElementById('pollQuestionInput').value.trim();
+    const options = [0,1,2,3]
+      .map(i=>document.getElementById('pollOptionInput'+i).value.trim())
+      .filter(Boolean);
+    if(!question || options.length<2){ toast('Add a question and at least 2 options.'); return; }
+    await sb.from('event_polls').insert({ question, options, created_by: state.me.id, closed:false });
+    closeModal(); await refresh();
+    toast('Poll created');
   });
 }
 
