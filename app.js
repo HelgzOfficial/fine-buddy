@@ -12,7 +12,7 @@ const state = {
   me: null,
   view: 'dashboard',
   viewAsPlayer: false,
-  team: { name: 'My Team', crest_url: null, stripe_link: '', bank_account_name:'', bank_sort_code:'', bank_account_number:'', bank_reference:'', double_bubble:false },
+  team: { name: 'My Team', crest_url: null, paypal_link: '', bank_account_name:'', bank_sort_code:'', bank_account_number:'', bank_reference:'', double_bubble:false },
   players: [],
   fines: [],
   fineLog: [],
@@ -428,19 +428,19 @@ function viewPay(){
   const p = state.me;
   const owed = playerOwed(p.id);
   const t = state.team;
-  const stripeUrl = t.stripe_link ? (t.stripe_link + (t.stripe_link.includes('?')?'&':'?') + 'prefilled_amount=' + encodeURIComponent(owed.toFixed(2)) + '&client_reference_id=' + encodeURIComponent(p.id)) : null;
+  const paypalUrl = t.paypal_link ? (t.paypal_link.replace(/\/+$/,'') + '/' + owed.toFixed(2) + 'GBP') : null;
   return `
     <h1 class="page-title">Pay Fines</h1>
     <div class="card">
       <div class="muted">Amount due</div>
       <div style="font-size:30px;font-weight:800;color:${owed>0?'var(--red-500)':'var(--green-600)'};margin-top:2px;">${fmt(owed)}</div>
     </div>
-    ${ stripeUrl ? `
+    ${ paypalUrl ? `
     <div class="section-title">Pay instantly</div>
     <div class="card">
-      <a class="btn btn-primary" href="${stripeUrl}" target="_blank" rel="noopener">💳 Pay ${fmt(owed)} now</a>
-      <small class="disclaimer">Opens a secure Stripe checkout page. Apple Pay and Google Pay appear automatically there on supported devices — nothing extra to set up.</small>
-    </div>` : isAdmin() ? `<div class="banner">Add your Stripe payment link in Team Settings to enable instant payments here.</div>` : ''}
+      <a class="btn paypal-btn" href="${paypalUrl}" target="_blank" rel="noopener">Pay ${fmt(owed)} with PayPal</a>
+      <small class="disclaimer">Opens PayPal with the amount already filled in. Tap "I've paid" below once it's gone through, so your admin sees your balance clear.</small>
+    </div>` : isAdmin() ? `<div class="banner">Add your PayPal.me link in Team Settings to enable instant payments here.</div>` : ''}
     <div class="section-title">Bank transfer</div>
     <div class="card">
       <div class="row between"><div class="muted">Account name</div><div class="name">${escapeHtml(t.bank_account_name||'—')}</div></div>
@@ -449,7 +449,7 @@ function viewPay(){
       <div class="row between"><div class="muted">Reference</div><div class="name">${escapeHtml(t.bank_reference||'FINE')}-${p.name.split(' ')[0].toUpperCase()}</div></div>
     </div>
     ${ owed>0 ? `<button class="btn btn-outline" id="markPaidBtn" data-player="${p.id}">I've paid — mark my balance as paid</button>` : '' }
-    <small class="disclaimer">Marking your balance as paid here notifies your admin — it's an honesty-system confirmation for bank transfers, separate from the automatic Stripe payment above.</small>
+    <small class="disclaimer">Marking your balance as paid here notifies your admin — it's an honesty-system confirmation for both PayPal and bank transfer, since neither is wired up to auto-update the app.</small>
   `;
 }
 
@@ -491,9 +491,9 @@ function viewTeamSettings(){
     </div>
     <div class="section-title">Payment details players will see</div>
     <div class="card">
-      <label class="field-label">Stripe Payment Link</label>
-      <input type="url" id="stripeLinkInput" value="${escapeHtml(t.stripe_link||'')}" placeholder="https://buy.stripe.com/...">
-      <small class="disclaimer">Create a "customer chooses amount" Payment Link in your Stripe Dashboard → Payment Links. Apple Pay / Google Pay show up automatically for players on supported devices.</small>
+      <label class="field-label">PayPal.me Link</label>
+      <input type="url" id="paypalLinkInput" value="${escapeHtml(t.paypal_link||'')}" placeholder="https://paypal.me/YourClubName">
+      <small class="disclaimer">Create a free PayPal.me link at paypal.me — just your club's PayPal account name, no business setup required. The app fills in each player's exact amount owed automatically when they tap Pay.</small>
       <label class="field-label">Bank account name</label>
       <input type="text" id="bankNameInput" value="${escapeHtml(t.bank_account_name||'')}">
       <div class="row" style="gap:10px;">
@@ -590,7 +590,7 @@ function bindGlobalEvents(){
   if(saveTeamBtn) saveTeamBtn.addEventListener('click', async ()=>{
     await sb.from('team_info').update({
       name: document.getElementById('teamNameInput').value.trim() || state.team.name,
-      stripe_link: document.getElementById('stripeLinkInput').value.trim(),
+      paypal_link: document.getElementById('paypalLinkInput').value.trim(),
       bank_account_name: document.getElementById('bankNameInput').value.trim(),
       bank_sort_code: document.getElementById('bankSortInput').value.trim(),
       bank_account_number: document.getElementById('bankAccInput').value.trim(),
