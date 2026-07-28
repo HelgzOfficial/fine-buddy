@@ -82,7 +82,35 @@ async function loadAll(){
 async function refresh(){ await loadAll(); render(); }
 
 /* ---------------- boot / auth ---------------- */
+function consumeUrlAuthArtifacts(){
+  // Handles two different ways a magic-link click can land back on the site:
+  // 1) A "?code=..." query param (PKCE-style link) that needs exchanging for a session.
+  // 2) A "#error=...&error_description=..." hash fragment when the link was
+  //    expired, already used, or otherwise rejected by Supabase.
+  const search = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+  const code = search.get('code');
+  const hashError = hash.get('error_description') || hash.get('error');
+
+  if(hashError){
+    state.authError = decodeURIComponent(hashError.replace(/\+/g, ' '));
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return Promise.resolve();
+  }
+  if(code){
+    return sb.auth.exchangeCodeForSession(window.location.href)
+      .then(({ error }) => {
+        if(error) state.authError = error.message;
+        window.history.replaceState({}, document.title, window.location.pathname);
+      })
+      .catch(()=>{ window.history.replaceState({}, document.title, window.location.pathname); });
+  }
+  return Promise.resolve();
+}
+
 async function boot(){
+  await consumeUrlAuthArtifacts();
   const { data: { session } } = await sb.auth.getSession();
   state.session = session;
   if(session){
