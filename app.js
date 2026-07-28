@@ -5,7 +5,15 @@
    ========================================================= */
 
 const cfg = window.FINE_BUDDY_CONFIG;
-const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+// flowType: 'implicit' is the important bit here. Supabase's default (PKCE)
+// ties a sign-in link to a secret stored only in the browser that requested
+// it, so opening the email on a different device (or a different browser on
+// the same device) always fails and bounces back to the sign-in screen.
+// Implicit flow puts the actual session tokens in the link itself, so it
+// works on whatever device the player opens their email on.
+const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+  auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+});
 
 const state = {
   session: null,
@@ -198,15 +206,21 @@ window.addEventListener('appinstalled', ()=>{
 
 /* ---------------- boot / auth ---------------- */
 function consumeUrlAuthArtifacts(){
-  // Handles two different ways a magic-link click can land back on the site:
-  // 1) A "?code=..." query param (PKCE-style link) that needs exchanging for a session.
-  // 2) A "#error=...&error_description=..." hash fragment when the link was
-  //    expired, already used, or otherwise rejected by Supabase.
+  // With flowType:'implicit', a successful sign-in link lands back here as
+  // "#access_token=...&refresh_token=...&type=magiclink" — supabase-js
+  // detects and consumes that itself (detectSessionInUrl:true), so there's
+  // nothing for us to do there except tidy the URL afterwards. What we DO
+  // need to handle ourselves is the failure case: an expired or already-used
+  // link comes back as "#error=...&error_description=...", which supabase-js
+  // doesn't turn into anything — so we surface that as a friendly message.
+  // The old "?code=..." PKCE-style link is also still handled below as a
+  // harmless fallback, in case anyone clicks an old link sent before this fix.
   const search = new URLSearchParams(window.location.search);
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
 
   const code = search.get('code');
   const hashError = hash.get('error_description') || hash.get('error');
+  const hasAuthTokens = hash.get('access_token');
 
   if(hashError){
     state.authError = decodeURIComponent(hashError.replace(/\+/g, ' '));
@@ -221,6 +235,13 @@ function consumeUrlAuthArtifacts(){
       })
       .catch(()=>{ window.history.replaceState({}, document.title, window.location.pathname); });
   }
+  // hasAuthTokens ("#access_token=...") is deliberately left untouched here —
+  // supabase-js's own detectSessionInUrl is already reading and consuming
+  // that hash in the background (it starts the moment the client is
+  // created), and it cleans the address bar itself once done. Stripping the
+  // hash ourselves first could win the race and wipe it out before the
+  // library gets to read it, which would break sign-in.
+  void hasAuthTokens;
   return Promise.resolve();
 }
 
