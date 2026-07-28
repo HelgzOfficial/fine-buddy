@@ -18,6 +18,8 @@ const state = {
   fineLog: [],
   announcements: [],
   events: [],
+  courtCases: [],
+  courtVotes: [],
   ready: false,
   authBusy: false,
   authSentTo: null,
@@ -35,11 +37,11 @@ function logsFor(playerId){ return state.fineLog.filter(l=>l.player_id===playerI
 function playerOwed(playerId){ return logsFor(playerId).filter(l=>!l.paid).reduce((s,l)=>s+Number(l.amount),0); }
 function playerWeekTotal(playerId){
   const sow = startOfWeek(new Date());
-  return logsFor(playerId).filter(l=>new Date(l.date) >= sow).reduce((s,l)=>s+Number(l.amount),0);
+  return logsFor(playerId).filter(l=>new Date(l.date) >= sow && !l.waived).reduce((s,l)=>s+Number(l.amount),0);
 }
 function playerPaidTotal(playerId){
   const p = getPlayer(playerId);
-  const loggedPaid = logsFor(playerId).filter(l=>l.paid).reduce((s,l)=>s+Number(l.amount),0);
+  const loggedPaid = logsFor(playerId).filter(l=>l.paid && !l.waived).reduce((s,l)=>s+Number(l.amount),0);
   return (p ? Number(p.season_paid||0) : 0) + loggedPaid;
 }
 function totalCollected(){ return state.players.reduce((s,p)=>s+playerPaidTotal(p.id),0); }
@@ -96,6 +98,16 @@ function reasonFor(playerId){
 }
 function isAdmin(){ return !!(state.me && state.me.is_admin); }
 function effectiveRole(){ return isAdmin() && !state.viewAsPlayer ? 'admin' : 'player'; }
+function isCommittee(){ return !!(state.me && (state.me.is_admin || state.me.is_committee)); }
+function committeeCount(){ return state.players.filter(p=>p.is_admin || p.is_committee).length; }
+function openCourtCases(){ return state.courtCases.filter(c=>c.status==='open'); }
+function resolvedCourtCases(){ return state.courtCases.filter(c=>c.status!=='open').slice().sort((a,b)=>new Date(b.resolved_at)-new Date(a.resolved_at)); }
+function votesForCase(caseId){ return state.courtVotes.filter(v=>v.case_id===caseId); }
+function myOpenCourtCase(){ return state.me ? state.courtCases.find(c=>c.defendant_id===state.me.id && c.status==='open') : null; }
+function openCasesNeedingMyVote(){
+  if(!isCommittee() || !state.me) return [];
+  return openCourtCases().filter(c=> c.defendant_id!==state.me.id && !votesForCase(c.id).some(v=>v.voter_id===state.me.id));
+}
 function mostLoggedFine(){
   if(!state.fineLog.length) return null;
   const counts = {};
@@ -113,19 +125,22 @@ const ICONS = {
   team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a7.7 7.7 0 000-3l2-1.5-2-3.4-2.3.9a7.6 7.6 0 00-2.6-1.5L14 2h-4l-.5 2.4a7.6 7.6 0 00-2.6 1.5l-2.3-.9-2 3.4 2 1.5a7.7 7.7 0 000 3l-2 1.6 2 3.4 2.3-.9c.8.7 1.7 1.2 2.6 1.5L10 22h4l.5-2.4c.9-.3 1.8-.8 2.6-1.5l2.3.9 2-3.4-2-1.6z"/></svg>`,
   profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="9.5" r="3.2"/><path d="M5.5 19a7 7 0 0113 0"/></svg>`,
   pay: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><line x1="2.5" y1="9.5" x2="21.5" y2="9.5"/><line x1="6" y1="15" x2="10" y2="15"/></svg>`,
+  court: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="5" y1="10" x2="5" y2="19"/><line x1="9" y1="10" x2="9" y2="19"/><line x1="15" y1="10" x2="15" y2="19"/><line x1="19" y1="10" x2="19" y2="19"/><line x1="3" y1="21" x2="21" y2="21"/></svg>`,
   gavelSm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 7l-3 7a3 3 0 0 0 6 0z"/><path d="M19 7l-3 7a3 3 0 0 0 6 0z"/><line x1="8" y1="21" x2="16" y2="21"/></svg>`,
   calendarSm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/></svg>`,
 };
 
 /* ---------------- data loading ---------------- */
 async function loadAll(){
-  const [teamRes, playersRes, finesRes, logRes, annRes, evRes] = await Promise.all([
+  const [teamRes, playersRes, finesRes, logRes, annRes, evRes, courtCasesRes, courtVotesRes] = await Promise.all([
     sb.from('team_info').select('*').eq('id',1).maybeSingle(),
     sb.from('players').select('*').order('created_at'),
     sb.from('fines').select('*').order('created_at'),
     sb.from('fine_log').select('*').order('date',{ascending:false}),
     sb.from('announcements').select('*').order('created_at'),
     sb.from('events').select('*').order('date'),
+    sb.from('court_cases').select('*').order('created_at',{ascending:false}),
+    sb.from('court_votes').select('*'),
   ]);
   if(teamRes.data) state.team = teamRes.data;
   state.players = playersRes.data || [];
@@ -133,6 +148,8 @@ async function loadAll(){
   state.fineLog = logRes.data || [];
   state.announcements = annRes.data || [];
   state.events = evRes.data || [];
+  state.courtCases = courtCasesRes.data || [];
+  state.courtVotes = courtVotesRes.data || [];
   state.me = state.players.find(p=>p.id === state.session.user.id) || null;
 }
 
@@ -172,6 +189,7 @@ async function boot(){
   state.session = session;
   if(session){
     await loadAll();
+    subscribeGlobalCourtNotifications();
   }
   state.ready = true;
   render();
@@ -180,11 +198,39 @@ async function boot(){
     state.session = session;
     if(session){
       await loadAll();
+      subscribeGlobalCourtNotifications();
     } else {
       state.me = null;
     }
     render();
   });
+}
+
+// There's no push-notification infrastructure here (that would need a
+// server holding device tokens) — so "notify the Committee" means a live
+// in-app alert via Supabase Realtime: while the app is open, a new case or
+// a fresh verdict pops a toast and refreshes the screen automatically.
+let globalCourtSubscribed = false;
+function subscribeGlobalCourtNotifications(){
+  if(globalCourtSubscribed || !sb.channel) return;
+  globalCourtSubscribed = true;
+  sb.channel('court-cases-global')
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'court_cases' }, async (payload)=>{
+      await refresh();
+      if(isCommittee() && payload.new.defendant_id !== state.me.id){
+        const defendant = getPlayer(payload.new.defendant_id);
+        toast(`⚖️ ${defendant?defendant.name:'A player'} has been called to Court — tap Court to review.`);
+      }
+    })
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'court_cases' }, async (payload)=>{
+      const wasOpen = payload.old && payload.old.status === 'open';
+      await refresh();
+      if(wasOpen && payload.new.status !== 'open'){
+        const defendant = getPlayer(payload.new.defendant_id);
+        toast(`⚖️ Verdict in: ${defendant?defendant.name:'A player'} — ${payload.new.status==='guilty'?'GUILTY':'NOT GUILTY'}`);
+      }
+    })
+    .subscribe();
 }
 
 async function sendMagicLink(email){
@@ -204,6 +250,7 @@ async function signOut(){ await sb.auth.signOut(); }
 /* ---------------- render engine ---------------- */
 const root = document.getElementById('root');
 let modalNode = null;
+let courtChannel = null; // realtime subscription for whichever court case modal is open
 
 function render(){
   // Admin gets a distinct white/light theme so it's never mistaken for the
@@ -301,17 +348,18 @@ function renderFab(){
 function renderBottomNav(){
   const adminTabs = [
     ['dashboard','Dashboard'],['fines','Fines'],['players','Players'],
-    ['events','Events'],['team','Team'],
+    ['court','Court'],['events','Events'],['team','Team'],
   ];
   const playerTabs = [
     ['dashboard','Overview'],['profile','My Profile'],['fines','Fines'],
-    ['events','Events'],['pay','Pay'],
+    ['court','Court'],['events','Events'],['pay','Pay'],
   ];
   const tabs = effectiveRole()==='admin' ? adminTabs : playerTabs;
+  const needsVote = openCasesNeedingMyVote().length;
   return `<nav class="bottom-nav">
     ${tabs.map(([id,label])=>`
       <button data-view="${id}" class="${state.view===id?'active':''}">
-        <span class="ic">${ICONS[id]}</span><span>${label}</span>
+        <span class="ic">${ICONS[id]}${id==='court' && needsVote ? '<span class="nav-badge"></span>' : ''}</span><span>${label}</span>
       </button>`).join('')}
   </nav>`;
 }
@@ -322,6 +370,7 @@ function renderView(){
     switch(state.view){
       case 'fines': return viewFinesAdmin();
       case 'players': return viewPlayersAdmin();
+      case 'court': return viewCourt();
       case 'events': return viewEvents();
       case 'team': return viewTeamSettings();
       default: return viewDashboard();
@@ -330,6 +379,7 @@ function renderView(){
   switch(state.view){
     case 'profile': return viewPlayerProfile();
     case 'fines': return viewFinesPlayer();
+    case 'court': return viewCourt();
     case 'events': return viewEvents();
     case 'pay': return viewPay();
     default: return viewDashboard();
@@ -341,6 +391,9 @@ function viewDashboard(){
   const outstanding = playersWithOutstanding();
   const clear = state.players.filter(p=>playerOwed(p.id)<=0);
   const pct = pctSquadOutstanding();
+  const myCase = state.me ? myOpenCourtCase() : null;
+  const latestVerdict = resolvedCourtCases()[0];
+  const pendingForMe = openCasesNeedingMyVote();
   return `
     <h1 class="page-title">Dashboard</h1>
     ${ clear.length ? `
@@ -349,6 +402,12 @@ function viewDashboard(){
       ${clear.map(p=>`<div class="avatar sm" data-player-click="${p.id}" title="${escapeHtml(p.name)}">${p.photo_url?`<img src="${p.photo_url}">`:initials(p.name)}</div>`).join('')}
     </div>
     ` : '' }
+    ${ pendingForMe.length ? `
+    <div class="banner court-banner" data-goto="court">
+      ⚖️ Court is in session — ${pendingForMe.length} case${pendingForMe.length>1?'s':''} awaiting your vote.
+    </div>
+    ` : '' }
+    ${ latestVerdict ? renderVerdictCard(latestVerdict) : '' }
     <div class="hero-collected">
       <div class="label">🏆 Total Collected This Season</div>
       <div class="value">${fmt(totalCollected())}</div>
@@ -361,6 +420,11 @@ function viewDashboard(){
         <div class="pct-detail">${outstanding.length} of ${state.players.length} players · ${fmt(totalOutstanding())} outstanding</div>
       </div>
     </div>
+    ${ effectiveRole()==='player' ? (
+      myCase ? `<button class="btn btn-outline" data-open-case="${myCase.id}" style="margin-bottom:14px;">⚖️ View my court case — awaiting verdict</button>`
+      : playerOwed(state.me.id) > 0 ? `<button class="btn btn-court" id="takeToCourtBtn" style="margin-bottom:14px;">⚖️ Take it to Court</button>`
+      : ''
+    ) : '' }
     <div class="section-title">🚨 Wall of Shame</div>
     ${ outstanding.length ? `
     <div class="wanted-row">
@@ -490,7 +554,7 @@ function viewPlayersAdmin(){
         <div class="row" style="gap:12px;" data-open-player="${p.id}">
           <div class="avatar">${p.photo_url?`<img src="${p.photo_url}">`:initials(p.name)}</div>
           <div>
-            <div class="name">${escapeHtml(p.name)} ${p.is_admin?'<span class="pill gold">Admin</span>':''}</div>
+            <div class="name">${escapeHtml(p.name)} ${p.is_admin?'<span class="pill gold">Admin</span>':''} ${p.is_committee?'<span class="pill committee">Committee</span>':''}</div>
             <div class="muted">This week: ${fmt(playerWeekTotal(p.id))} · Paid: ${fmt(playerPaidTotal(p.id))}</div>
           </div>
         </div>
@@ -498,6 +562,87 @@ function viewPlayersAdmin(){
       </div>
     `).join('') || `<div class="empty">No players yet — invite your squad below.</div>`}
     <button class="btn btn-outline" id="inviteBtn" style="margin-top:6px;">✉️ Invite a player</button>
+  `;
+}
+
+/* ---------------- COURT ---------------- */
+function renderVerdictCard(c){
+  const defendant = getPlayer(c.defendant_id);
+  const guilty = c.status === 'guilty';
+  return `
+  <div class="verdict-card ${guilty?'guilty':'not-guilty'}">
+    <div class="verdict-gavel">${ICONS.gavelSm}</div>
+    <div>
+      <div class="verdict-headline"><b>${escapeHtml(defendant?defendant.name:'A player')}</b> has been found <span class="verdict-tag">${guilty?'GUILTY':'NOT GUILTY'}</span> of ${escapeHtml(c.fine_label || 'the disputed charge')}${guilty ? '' : ' — the fine has been waived'}.</div>
+      <div class="verdict-sub">"${escapeHtml(c.reason)}"</div>
+    </div>
+  </div>`;
+}
+function renderCaseRow(c){
+  const defendant = getPlayer(c.defendant_id);
+  const votes = votesForCase(c.id);
+  return `
+    <div class="list-row" data-open-case="${c.id}">
+      <div class="list-icon gold">${ICONS.gavelSm}</div>
+      <div class="lbl">
+        <div class="title">${escapeHtml(defendant?defendant.name:'Unknown player')}</div>
+        <div class="sub">${escapeHtml(c.fine_label || 'General dispute')} · ${votes.length} vote${votes.length===1?'':'s'} in</div>
+      </div>
+      <span class="price-tag">›</span>
+    </div>`;
+}
+function renderVerdictRow(c){
+  const defendant = getPlayer(c.defendant_id);
+  const guilty = c.status === 'guilty';
+  return `
+    <div class="list-row" data-open-case="${c.id}">
+      <div class="list-icon ${guilty?'':'gold'}">${ICONS.gavelSm}</div>
+      <div class="lbl">
+        <div class="title">${escapeHtml(defendant?defendant.name:'Unknown player')}</div>
+        <div class="sub">${escapeHtml(c.fine_label || 'General dispute')}</div>
+      </div>
+      <span class="pill ${guilty?'owed':'clear'}">${guilty?'Guilty':'Not guilty'}</span>
+    </div>`;
+}
+function viewCourt(){
+  if(isCommittee()) return viewCourtCommittee();
+  return viewCourtPlayer();
+}
+function viewCourtCommittee(){
+  const open = openCourtCases();
+  const resolved = resolvedCourtCases();
+  return `
+    <h1 class="page-title">Court</h1>
+    <div class="stat-grid" style="margin-bottom:14px;">
+      <div class="stat-tile"><div class="label">On the docket</div><div class="value">${open.length}</div></div>
+      <div class="stat-tile"><div class="label">Cases closed</div><div class="value">${resolved.length}</div></div>
+    </div>
+    <div class="section-title">Open cases</div>
+    ${ open.length ? `<div class="list-card">${open.map(renderCaseRow).join('')}</div>` : `<div class="card empty">No one's currently on trial. ⚖️</div>` }
+    ${ resolved.length ? `
+    <div class="section-title">Past verdicts</div>
+    <div class="list-card">${resolved.slice(0,12).map(renderVerdictRow).join('')}</div>
+    ` : '' }
+    <small class="disclaimer">As a Committee member, you can see every case, join the discussion, and cast one vote per case. Once everyone eligible has voted, the verdict is applied automatically.</small>
+  `;
+}
+function viewCourtPlayer(){
+  const mine = state.courtCases.filter(c=>c.defendant_id===state.me.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const active = mine.find(c=>c.status==='open');
+  const history = mine.filter(c=>c.status!=='open');
+  return `
+    <h1 class="page-title">Court</h1>
+    ${ active ? `
+    <div class="banner">⚖️ Your case is open — the Committee is discussing it now. Add your side of the story below.</div>
+    <div class="list-card">${renderCaseRow(active)}</div>
+    ` : `
+    <div class="card empty">You don't have an open case. Got a fine you think is unfair? Head to your Dashboard and tap <b>Take it to Court</b> on your outstanding balance.</div>
+    ` }
+    ${ history.length ? `
+    <div class="section-title">Your case history</div>
+    <div class="list-card">${history.map(renderVerdictRow).join('')}</div>
+    ` : '' }
+    <small class="disclaimer">Every player can be called to Court, no matter their role — the Committee reviews the chat, then votes guilty or not guilty. A not-guilty verdict automatically waives the fine.</small>
   `;
 }
 
@@ -644,7 +789,10 @@ function openModal(html, opts={}){
   modalNode.addEventListener('click',(e)=>{ if(e.target===modalNode) closeModal(); });
   document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
 }
-function closeModal(){ if(modalNode){ modalNode.remove(); modalNode=null; } }
+function closeModal(){
+  if(courtChannel){ sb.removeChannel(courtChannel); courtChannel=null; }
+  if(modalNode){ modalNode.remove(); modalNode=null; }
+}
 
 function fileToPath(prefix, file){
   const ext = (file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
@@ -674,6 +822,10 @@ function bindGlobalEvents(){
     else if(isAdmin()){ openPlayerDetailModal(pid); }
   }));
   ['signOutBtn','signOutBtn2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', signOut); });
+
+  root.querySelectorAll('[data-open-case]').forEach(el=>el.addEventListener('click', ()=>openCaseModal(el.dataset.openCase)));
+  const takeToCourtBtn = document.getElementById('takeToCourtBtn');
+  if(takeToCourtBtn) takeToCourtBtn.addEventListener('click', openTakeToCourtModal);
 
   root.querySelectorAll('[data-del-announce]').forEach(b=>b.addEventListener('click', async ()=>{
     await sb.from('announcements').delete().eq('id', b.dataset.delAnnounce); await refresh();
@@ -870,13 +1022,14 @@ function openPlayerDetailModal(playerId){
       <div class="row between" style="margin-bottom:8px;">
         <div><div style="font-size:13.5px;font-weight:700;">${escapeHtml(l.label)}</div><div class="muted">${l.date}</div></div>
         <div class="row" style="gap:8px;">
-          <span class="pill ${l.paid?'clear':'owed'}">${fmt(l.amount)}</span>
+          <span class="pill ${l.waived?'gold':l.paid?'clear':'owed'}">${l.waived?'Waived by Court':fmt(l.amount)}</span>
           <button class="link-btn" data-del-log="${l.id}" title="Delete this fine entry">✕</button>
         </div>
       </div>`).join('') : `<div class="empty">No fines yet</div>`}
     <div class="divider"></div>
     <button class="btn btn-primary" id="markPlayerPaidBtn">Mark all as paid</button>
     ${!p.is_admin ? `<button class="btn btn-outline" id="makeAdminBtn" style="margin-top:8px;">Make team admin</button>` : ''}
+    <button class="btn btn-outline" id="toggleCommitteeBtn" style="margin-top:8px;">${p.is_committee ? 'Remove from Committee' : '⚖️ Make Committee member'}</button>
   `, { title:'Player details' });
   modalNode.querySelectorAll('[data-del-log]').forEach(btn=>btn.addEventListener('click', async ()=>{
     if(!confirm('Delete this fine entry? This cannot be undone.')) return;
@@ -903,6 +1056,172 @@ function openPlayerDetailModal(playerId){
     closeModal(); await refresh();
     toast(`${p.name} is now a team admin`);
   });
+  const toggleCommitteeBtn = document.getElementById('toggleCommitteeBtn');
+  if(toggleCommitteeBtn) toggleCommitteeBtn.addEventListener('click', async ()=>{
+    await sb.from('players').update({ is_committee: !p.is_committee }).eq('id', p.id);
+    closeModal(); await refresh();
+    toast(`${p.name} ${p.is_committee ? 'removed from' : 'added to'} the Committee`);
+  });
+}
+
+/* ---------------- Court modal — dispute a fine, chat, vote ---------------- */
+function openTakeToCourtModal(){
+  const myUnpaid = logsFor(state.me.id).filter(l=>!l.paid);
+  if(!myUnpaid.length){ toast("You don't have any outstanding fines to dispute."); return; }
+  openModal(`
+    <div class="muted" style="margin-bottom:10px;">Pick the fine you want to dispute, then make your case to the Committee.</div>
+    <label class="field-label">Which fine?</label>
+    <select id="courtFineSelect">${myUnpaid.map(l=>`<option value="${l.id}">${escapeHtml(l.label)} — ${fmt(l.amount)} (${l.date})</option>`).join('')}</select>
+    <label class="field-label">Why do you think this fine is unfair?</label>
+    <textarea id="courtReasonInput" rows="4" placeholder="Make your case…"></textarea>
+    <button class="btn btn-court" id="submitCourtBtn" style="margin-top:14px;">⚖️ Submit to the Committee</button>
+    <small class="disclaimer">This opens a private thread between you and the Committee, who'll discuss it and vote guilty or not guilty. A not-guilty verdict automatically waives the fine.</small>
+  `, { title:'Take it to Court' });
+  document.getElementById('submitCourtBtn').addEventListener('click', async ()=>{
+    const logId = document.getElementById('courtFineSelect').value;
+    const reason = document.getElementById('courtReasonInput').value.trim();
+    if(!reason) return;
+    const log = state.fineLog.find(l=>l.id===logId);
+    const btn = document.getElementById('submitCourtBtn');
+    btn.disabled = true; btn.textContent = 'Submitting…';
+    const { data, error } = await sb.from('court_cases').insert({
+      defendant_id: state.me.id, fine_log_id: log ? log.id : null, fine_label: log ? log.label : null, reason
+    }).select().maybeSingle();
+    if(error || !data){
+      toast('Could not open your case: ' + (error ? error.message : 'unknown error'));
+      btn.disabled = false; btn.textContent = '⚖️ Submit to the Committee';
+      return;
+    }
+    await sb.from('court_messages').insert({ case_id: data.id, sender_id: state.me.id, body: reason });
+    closeModal();
+    await refresh();
+    const size = committeeCount() - 1; // excluding the defendant, if they're on the committee too
+    toast(`Your case is open — ${Math.max(size,0)} committee member${size===1?'':'s'} notified`);
+    state.view = 'court'; render();
+    openCaseModal(data.id);
+  });
+}
+
+function openCaseModal(caseId){
+  let c = state.courtCases.find(x=>x.id===caseId);
+  if(!c) return;
+  let messages = [];
+
+  const load = async ()=>{
+    const { data } = await sb.from('court_messages').select('*').eq('case_id', caseId).order('created_at');
+    messages = data || [];
+    renderCaseModal(c, messages);
+  };
+  load();
+
+  if(sb.channel){
+    courtChannel = sb.channel('court-'+caseId)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'court_messages', filter:`case_id=eq.${caseId}` }, payload=>{
+        if(!messages.some(m=>m.id===payload.new.id)){
+          messages = [...messages, payload.new];
+          renderCaseModal(c, messages);
+        }
+      })
+      .on('postgres_changes', { event:'*', schema:'public', table:'court_votes', filter:`case_id=eq.${caseId}` }, async ()=>{
+        await refresh();
+        c = state.courtCases.find(x=>x.id===caseId) || c;
+        renderCaseModal(c, messages);
+      })
+      .subscribe();
+  }
+}
+
+function renderCaseModal(c, messages){
+  const defendant = getPlayer(c.defendant_id);
+  const committee = isCommittee();
+  const isMine = c.defendant_id === state.me.id;
+  const votes = votesForCase(c.id);
+  const myVote = votes.find(v=>v.voter_id===state.me.id);
+  const stillToVote = Math.max(committeeCount() - (state.players.some(p=>p.id===c.defendant_id && (p.is_admin||p.is_committee)) ? 1 : 0) - votes.length, 0);
+  const guiltyCount = votes.filter(v=>v.verdict==='guilty').length;
+  const notGuiltyCount = votes.filter(v=>v.verdict==='not_guilty').length;
+
+  const body = `
+    <div class="case-summary">
+      <div class="row" style="gap:10px;">
+        <div class="avatar">${defendant && defendant.photo_url?`<img src="${defendant.photo_url}">`:initials(defendant?defendant.name:'?')}</div>
+        <div>
+          <div class="name">${escapeHtml(defendant?defendant.name:'Unknown player')}</div>
+          <div class="muted">${escapeHtml(c.fine_label || 'General dispute')}</div>
+        </div>
+      </div>
+      <div class="case-status-pill ${c.status}">${c.status==='open'?'Open':c.status==='guilty'?'Guilty':'Not Guilty'}</div>
+    </div>
+    <div class="case-reason">"${escapeHtml(c.reason)}"</div>
+
+    ${ committee && !isMine ? `
+      <div class="vote-panel">
+        <div class="vote-tally">${guiltyCount} guilty · ${notGuiltyCount} not guilty · ${stillToVote} yet to vote</div>
+        ${ c.status==='open' ? `
+        <div class="btn-block-row">
+          <button class="btn btn-guilty" data-vote="guilty" ${myVote && myVote.verdict==='guilty' ? 'disabled':''}>🔨 Guilty</button>
+          <button class="btn btn-not-guilty" data-vote="not_guilty" ${myVote && myVote.verdict==='not_guilty' ? 'disabled':''}>🕊️ Not Guilty</button>
+        </div>
+        ${myVote ? `<div class="muted center-text" style="margin-top:8px;">You voted ${myVote.verdict==='guilty'?'Guilty':'Not Guilty'} — tap the other button to change your vote.</div>` : ''}
+        ` : `<div class="muted center-text" style="margin-top:8px;">${escapeHtml(c.verdict_note||'')}</div>` }
+      </div>
+    ` : '' }
+    ${ !committee && c.status!=='open' ? `<div class="vote-panel"><div class="muted center-text">${escapeHtml(c.verdict_note||'')}</div></div>` : '' }
+
+    <div class="section-title" style="margin-top:20px;">Discussion</div>
+    <div class="court-chat" id="courtChatLog">
+      ${ messages.length ? messages.map(m=>{
+        const sender = getPlayer(m.sender_id);
+        const mine = m.sender_id === state.me.id;
+        return `<div class="chat-bubble ${mine?'mine':''}">
+          <div class="chat-sender">${escapeHtml(sender?sender.name:'Unknown')}</div>
+          <div class="chat-body">${escapeHtml(m.body)}</div>
+        </div>`;
+      }).join('') : `<div class="empty">No messages yet — start the discussion below.</div>` }
+    </div>
+    ${ c.status==='open' ? `
+    <div class="row" style="gap:8px;margin-top:10px;">
+      <input type="text" id="courtMsgInput" placeholder="Type a message…" style="flex:1;">
+      <button class="btn btn-primary btn-sm" id="courtSendBtn">Send</button>
+    </div>
+    ` : `<div class="muted center-text" style="margin-top:10px;">This case is closed — no further messages.</div>` }
+  `;
+
+  if(modalNode){
+    modalNode.querySelector('.modal').innerHTML = `
+      <div class="modal-head"><h2>Case file</h2><button class="modal-close" id="modalCloseBtn">✕</button></div>
+      ${body}
+    `;
+    document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+  } else {
+    openModal(body, { title:'Case file' });
+  }
+  bindCaseModalEvents(c, messages);
+  const log = document.getElementById('courtChatLog');
+  if(log) log.scrollTop = log.scrollHeight;
+}
+
+function bindCaseModalEvents(c, messages){
+  const sendBtn = document.getElementById('courtSendBtn');
+  if(sendBtn) sendBtn.addEventListener('click', async ()=>{
+    const input = document.getElementById('courtMsgInput');
+    const body = input.value.trim();
+    if(!body) return;
+    input.value = '';
+    await sb.from('court_messages').insert({ case_id: c.id, sender_id: state.me.id, body });
+    const { data } = await sb.from('court_messages').select('*').eq('case_id', c.id).order('created_at');
+    renderCaseModal(c, data || messages);
+  });
+  const msgInput = document.getElementById('courtMsgInput');
+  if(msgInput) msgInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('courtSendBtn').click(); } });
+  if(modalNode) modalNode.querySelectorAll('[data-vote]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const verdict = btn.dataset.vote;
+    await sb.from('court_votes').upsert({ case_id: c.id, voter_id: state.me.id, verdict }, { onConflict:'case_id,voter_id' });
+    await refresh();
+    const updated = state.courtCases.find(x=>x.id===c.id) || c;
+    renderCaseModal(updated, messages);
+    toast(verdict==='guilty' ? 'You voted Guilty' : 'You voted Not Guilty');
+  }));
 }
 
 function openEventModal(){
