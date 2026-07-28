@@ -131,6 +131,53 @@
   .double-bubble-card.is-on{border-color:var(--gold-500); box-shadow:0 4px 18px rgba(221,186,120,0.3);}
   .banner-alert{background:linear-gradient(135deg,#f2a4a2,var(--red-500));color:#fff;}
 
+  .pill.committee{background:#e7edff;color:#33449c;}
+
+  /* ---------- Court ---------- */
+  .btn-court{
+    background:linear-gradient(135deg,#1a1a1a,#000); color:var(--gold-500); border:1.5px solid var(--gold-500);
+  }
+  .banner.court-banner{
+    background:linear-gradient(135deg,#232323,#000); color:var(--gold-500); cursor:pointer;
+  }
+  .nav-badge{
+    position:absolute; top:1px; right:5px; width:9px; height:9px; border-radius:50%;
+    background:var(--red-500); border:2px solid #fff;
+  }
+  .verdict-card{
+    display:flex; gap:14px; align-items:flex-start;
+    background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px; margin-bottom:14px;
+    border-left:5px solid var(--ink-500);
+  }
+  .verdict-card.guilty{border-left-color:var(--red-500);}
+  .verdict-card.not-guilty{border-left-color:var(--green-600);}
+  .verdict-gavel{
+    width:42px;height:42px;border-radius:12px;background:var(--bg);display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;color:var(--ink-700);
+  }
+  .verdict-gavel svg{width:20px;height:20px;}
+  .verdict-headline{font-size:15.5px;line-height:1.45;}
+  .verdict-tag{font-weight:900;padding:2px 9px;border-radius:6px;font-size:13px;}
+  .verdict-card.guilty .verdict-tag{background:var(--red-100);color:var(--red-500);}
+  .verdict-card.not-guilty .verdict-tag{background:#e2f5ea;color:var(--green-600);}
+  .verdict-sub{font-size:13px;color:var(--ink-500);margin-top:5px;font-style:italic;}
+
+  .case-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+  .case-status-pill{font-weight:800;font-size:12px;padding:5px 11px;border-radius:999px;background:var(--bg);color:var(--ink-700);white-space:nowrap;}
+  .case-status-pill.guilty{background:var(--red-100);color:var(--red-500);}
+  .case-status-pill.not_guilty{background:#e2f5ea;color:var(--green-600);}
+  .case-reason{background:var(--bg);border-radius:12px;padding:13px 15px;font-size:14.5px;font-style:italic;color:var(--ink-700);margin-bottom:16px;}
+  .vote-panel{background:var(--bg);border-radius:16px;padding:15px;margin-bottom:10px;}
+  .vote-tally{font-size:12.5px;font-weight:700;color:var(--ink-500);text-align:center;margin-bottom:11px;}
+  .btn-guilty{background:var(--red-500);color:#fff;}
+  .btn-not-guilty{background:var(--green-600);color:#fff;}
+  .court-chat{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding:4px 2px;}
+  .chat-bubble{background:var(--bg);border-radius:14px;padding:10px 14px;max-width:82%;align-self:flex-start;}
+  .chat-bubble.mine{background:var(--green-600);color:#fff;align-self:flex-end;}
+  .chat-bubble .chat-sender{font-size:11px;font-weight:800;opacity:.7;margin-bottom:3px;}
+  .chat-bubble.mine .chat-sender{color:rgba(255,255,255,0.85);}
+  .chat-bubble .chat-body{font-size:14.5px;line-height:1.4;}
+
   .row{display:flex;align-items:center;gap:12px;}
   .row + .row{margin-top:10px;}
   .between{justify-content:space-between;}
@@ -216,7 +263,7 @@
     transition:color .15s ease;
   }
   nav.bottom-nav button .ic{
-    width:42px;height:27px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    position:relative; width:40px;height:27px;border-radius:11px;display:flex;align-items:center;justify-content:center;
     transition:background .15s ease, transform .12s ease;
   }
   nav.bottom-nav button .ic svg{width:22px;height:22px;}
@@ -386,6 +433,9 @@
   #root.role-admin .pct-ring-inner{color:var(--red-500);}
   #root.role-admin .avatar{background:var(--ink-900); color:var(--gold-500);}
   #root.role-admin .avatar img{background:#fff;}
+  #root.role-admin .chat-bubble.mine{background:var(--ink-900);}
+  #root.role-admin .verdict-card{border-left-color:var(--ink-500);}
+  #root.role-admin .case-status-pill{background:#f1f1ee;}
 
   /* ---------- Auth screen ---------- */
   .auth-wrap{
