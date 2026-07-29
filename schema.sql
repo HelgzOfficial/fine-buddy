@@ -230,6 +230,13 @@ create table if not exists public.court_messages (
   body text not null,
   created_at timestamptz not null default now()
 );
+-- Evidence attachments — a photo, a short video, or a voice note recorded
+-- right in the app, alongside (or instead of) a typed message. Safe to
+-- re-run: body stays required (an attachment-only message just sends an
+-- empty string), these two columns are the only addition.
+alter table public.court_messages add column if not exists media_url text;
+alter table public.court_messages add column if not exists media_type text
+  check (media_type is null or media_type in ('image','video','audio'));
 
 create table if not exists public.court_votes (
   id uuid primary key default gen_random_uuid(),

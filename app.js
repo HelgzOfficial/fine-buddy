@@ -554,6 +554,9 @@ async function signOut(){ await sb.auth.signOut(); }
 const root = document.getElementById('root');
 let modalNode = null;
 let courtChannel = null; // realtime subscription for whichever court case modal is open
+let courtRecorder = null; // in-progress MediaRecorder for a voice note, if any
+let courtRecorderChunks = [];
+let courtRecorderStream = null;
 
 function render(){
   // Admin gets a distinct white/light theme so it's never mistaken for the
@@ -1308,6 +1311,9 @@ function openModal(html, opts={}){
 }
 function closeModal(){
   if(courtChannel){ sb.removeChannel(courtChannel); courtChannel=null; }
+  if(courtRecorder){ try{ courtRecorder.stop(); }catch(e){} }
+  if(courtRecorderStream){ courtRecorderStream.getTracks().forEach(t=>t.stop()); courtRecorderStream=null; }
+  courtRecorder = null; courtRecorderChunks = [];
   if(modalNode){ modalNode.remove(); modalNode=null; }
 }
 
@@ -1320,6 +1326,22 @@ async function uploadImage(prefix, file){
   if(file.size > 8*1024*1024){ toast('That image is too large — please use one under 8MB.'); return null; }
   const path = fileToPath(prefix, file);
   const { error } = await sb.storage.from('media').upload(path, file, { cacheControl:'3600', upsert:false });
+  if(error){ toast('Upload failed: ' + error.message + ' — check the "media" storage bucket exists and is public.'); return null; }
+  const { data } = sb.storage.from('media').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// Court evidence — photos, short videos, or voice notes recorded in the
+// app, attached to a dispute message. Same "media" storage bucket as
+// everything else, just a looser type/size check and its own folder.
+async function uploadCourtMedia(prefix, file, kind){
+  const maxBytes = kind === 'image' ? 8*1024*1024 : 40*1024*1024;
+  if(file.size > maxBytes){
+    toast(`That ${kind} is too large — please keep it under ${kind==='image'?'8MB':'40MB'}.`);
+    return null;
+  }
+  const path = fileToPath(prefix, file);
+  const { error } = await sb.storage.from('media').upload(path, file, { cacheControl:'3600', upsert:false, contentType: file.type || undefined });
   if(error){ toast('Upload failed: ' + error.message + ' — check the "media" storage bucket exists and is public.'); return null; }
   const { data } = sb.storage.from('media').getPublicUrl(path);
   return data.publicUrl;
@@ -1761,16 +1783,31 @@ function renderCaseModal(c, messages){
       ${ messages.length ? messages.map(m=>{
         const sender = getPlayer(m.sender_id);
         const mine = m.sender_id === state.me.id;
+        let mediaHtml = '';
+        if(m.media_url){
+          if(m.media_type==='image') mediaHtml = `<img class="chat-media" src="${m.media_url}" alt="Attached photo">`;
+          else if(m.media_type==='video') mediaHtml = `<video class="chat-media" src="${m.media_url}" controls playsinline></video>`;
+          else if(m.media_type==='audio') mediaHtml = `<audio class="chat-media-audio" src="${m.media_url}" controls></audio>`;
+        }
         return `<div class="chat-bubble ${mine?'mine':''}">
           <div class="chat-sender">${escapeHtml(sender?sender.name:'Unknown')}</div>
-          <div class="chat-body">${escapeHtml(m.body)}</div>
+          ${ mediaHtml }
+          ${ m.body ? `<div class="chat-body">${escapeHtml(m.body)}</div>` : '' }
         </div>`;
       }).join('') : `<div class="empty">No messages yet — start the discussion below.</div>` }
     </div>
     ${ c.status==='open' ? `
-    <div class="row" style="gap:8px;margin-top:10px;">
-      <input type="text" id="courtMsgInput" placeholder="Type a message…" style="flex:1;">
-      <button class="btn btn-primary btn-sm" id="courtSendBtn">Send</button>
+    <div class="court-attach-row" id="courtAttachRow">
+      <div class="row" style="gap:8px;" id="courtMsgRow">
+        <input type="text" id="courtMsgInput" placeholder="Type a message…" style="flex:1;">
+        <button class="btn btn-primary btn-sm" id="courtSendBtn">Send</button>
+      </div>
+      <div class="row" style="gap:8px;margin-top:8px;" id="courtAttachButtonsRow">
+        <button class="btn btn-ghost btn-sm" id="courtAttachBtn" type="button">📎 Photo / Video</button>
+        <button class="btn btn-ghost btn-sm" id="courtRecordBtn" type="button">🎙️ Voice note</button>
+        <input type="file" id="courtFileInput" accept="image/*,video/*" style="display:none;">
+      </div>
+      <div class="muted center-text" id="courtRecordStatus" style="display:none;margin-top:6px;">🔴 Recording… <button class="btn btn-sm" id="courtRecordStopBtn" type="button">Stop &amp; send</button> <button class="btn btn-sm" id="courtRecordCancelBtn" type="button">Cancel</button></div>
     </div>
     ` : `<div class="muted center-text" style="margin-top:10px;">This case is closed — no further messages.</div>` }
   `;
@@ -1802,6 +1839,91 @@ function bindCaseModalEvents(c, messages){
   });
   const msgInput = document.getElementById('courtMsgInput');
   if(msgInput) msgInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('courtSendBtn').click(); } });
+
+  const reloadMessages = async ()=>{
+    const { data } = await sb.from('court_messages').select('*').eq('case_id', c.id).order('created_at');
+    renderCaseModal(c, data || messages);
+  };
+
+  const attachBtn = document.getElementById('courtAttachBtn');
+  const fileInput = document.getElementById('courtFileInput');
+  if(attachBtn && fileInput) attachBtn.addEventListener('click', ()=> fileInput.click());
+  if(fileInput) fileInput.addEventListener('change', async ()=>{
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if(!file) return;
+    const kind = file.type && file.type.startsWith('video/') ? 'video' : file.type && file.type.startsWith('image/') ? 'image' : null;
+    if(!kind){ toast('Please choose a photo or video file.'); return; }
+    toast('Uploading…');
+    const url = await uploadCourtMedia('court-evidence', file, kind);
+    if(!url) return;
+    await sb.from('court_messages').insert({ case_id: c.id, sender_id: state.me.id, body: '', media_url: url, media_type: kind });
+    await reloadMessages();
+  });
+
+  const recordBtn = document.getElementById('courtRecordBtn');
+  const recordStatus = document.getElementById('courtRecordStatus');
+  const recordStopBtn = document.getElementById('courtRecordStopBtn');
+  const recordCancelBtn = document.getElementById('courtRecordCancelBtn');
+  const msgRow = document.getElementById('courtMsgRow');
+  const attachButtonsRow = document.getElementById('courtAttachButtonsRow');
+
+  const stopStream = ()=>{
+    if(courtRecorderStream){ courtRecorderStream.getTracks().forEach(t=>t.stop()); courtRecorderStream = null; }
+    courtRecorder = null; courtRecorderChunks = [];
+  };
+
+  if(recordBtn) recordBtn.addEventListener('click', async ()=>{
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined'){
+      toast('Voice notes aren\'t supported on this browser.');
+      return;
+    }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      courtRecorderStream = stream;
+      courtRecorderChunks = [];
+      const mime = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      courtRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      courtRecorder.addEventListener('dataavailable', e=>{ if(e.data && e.data.size>0) courtRecorderChunks.push(e.data); });
+      courtRecorder.start();
+      if(msgRow) msgRow.style.display = 'none';
+      if(attachButtonsRow) attachButtonsRow.style.display = 'none';
+      if(recordStatus) recordStatus.style.display = 'block';
+    } catch(err){
+      toast('Could not access the microphone — check permissions and try again.');
+      stopStream();
+    }
+  });
+
+  const finishRecording = (send)=>new Promise(resolve=>{
+    if(!courtRecorder){ resolve(null); return; }
+    courtRecorder.addEventListener('stop', ()=>{
+      const blob = send ? new Blob(courtRecorderChunks, { type: courtRecorder.mimeType || 'audio/webm' }) : null;
+      stopStream();
+      resolve(blob);
+    }, { once:true });
+    courtRecorder.stop();
+  });
+
+  if(recordStopBtn) recordStopBtn.addEventListener('click', async ()=>{
+    if(recordStatus) recordStatus.style.display = 'none';
+    const blob = await finishRecording(true);
+    if(!blob){ await reloadMessages(); return; }
+    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
+    const file = new File([blob], `voice-note.${ext}`, { type: blob.type });
+    toast('Uploading voice note…');
+    const url = await uploadCourtMedia('court-evidence', file, 'audio');
+    if(!url){ await reloadMessages(); return; }
+    await sb.from('court_messages').insert({ case_id: c.id, sender_id: state.me.id, body: '', media_url: url, media_type: 'audio' });
+    await reloadMessages();
+  });
+
+  if(recordCancelBtn) recordCancelBtn.addEventListener('click', async ()=>{
+    if(recordStatus) recordStatus.style.display = 'none';
+    await finishRecording(false);
+    await reloadMessages();
+  });
+
   if(modalNode) modalNode.querySelectorAll('[data-vote]').forEach(btn=>btn.addEventListener('click', async ()=>{
     const verdict = btn.dataset.vote;
     await sb.from('court_votes').upsert({ case_id: c.id, voter_id: state.me.id, verdict }, { onConflict:'case_id,voter_id' });

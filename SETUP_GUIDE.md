@@ -14,7 +14,7 @@ Everything in this folder is the real, working app. You don't need to write or u
 1. Go to github.com, sign in, click the **+** in the top right → **New repository**.
 2. Name it `fine-buddy`, keep it Public or Private (either is fine), don't add a README, click **Create repository**.
 3. On the next page click **uploading an existing file**.
-4. Drag every file from this folder in (index.html, app.js, config.js, manifest.json, sw.js, icon-192.png, icon-512.png, icon-180.png). You can skip `schema.sql` and this guide — they're not part of the live site.
+4. Drag every file from this folder in (index.html, app.js, config.js, manifest.json, sw.js, vercel.json, signup.html, icon-192.png, icon-512.png, icon-180.png). You can skip `schema.sql` and this guide — they're not part of the live site.
 5. Click **Commit changes**.
 
 ## Step 3 — Publish it (Vercel)
@@ -108,6 +108,25 @@ The fix: the app now also emails a plain 6-digit code alongside the link. Typing
    ```
    Click **Save**. No `schema.sql` re-run needed for this step — it's an email setting, not a database change.
 3. That's it. From now on, the sign-in email includes both options: the link (fastest on a regular phone browser) and the code (the one that actually works from a Home Screen icon).
+
+## Step 14 — Make sure Home Screen icons actually pick up future updates
+
+Every time I send you an update from here on, two things need to happen for it to actually show up on a phone that's already got Fine Buddy saved to its Home Screen:
+
+1. **This one's on the hosting side, and only needs doing once:** this update adds a new file, `vercel.json`, which tells Vercel not to cache `sw.js`, `index.html`, and `manifest.json` too aggressively. Without it, phones could keep using an old cached copy of the app indefinitely and never notice a new version was published, no matter how many times you reopen it. Upload `vercel.json` to GitHub alongside the other files (Step 2) and it'll take effect on the next deploy — nothing to configure inside it.
+2. **This one's a habit for every future update, on each phone:** on iPhones, just tapping away from the app and back doesn't count as reopening it — iOS often just resumes whatever was already running in the background, old version and all. After any update goes live, fully close the app first (open the app switcher, swipe the Fine Buddy card away) and then tap the Home Screen icon again. That forces a genuinely fresh load, which is what lets it notice and grab the new version.
+
+## Step 15 — Evidence in Court disputes (photos, video, voice notes)
+
+The Court chat (Step 7) now supports more than typed text — anyone in an open case can attach a photo, a short video, or record a voice note right in the app, so a dispute can include the actual evidence (a screenshot, a video clip, a spoken explanation) rather than just a written message.
+
+1. Update `index.html` and `app.js` from this folder (Steps 2–3).
+2. Re-run `schema.sql` in the Supabase SQL editor (Step 1). It's safe to re-run the whole file — this update only adds two new columns (`media_url`, `media_type`) to the existing `court_messages` table; nothing else changes or gets deleted.
+3. That's it — no new storage bucket or settings needed, since this reuses the same `media` bucket that photo uploads elsewhere in the app already use.
+
+How it works for players: inside an open case, alongside the message box there are two buttons — **📎 Photo / Video** (opens the phone's photo/camera picker) and **🎙️ Voice note** (records straight from the phone's microphone, with a Stop & send / Cancel option while recording). Attachments show up inline in the chat log for everyone in the case. Once a case is closed (guilty/not guilty), attaching is turned off the same way typing already was — it becomes a read-only record of the discussion and evidence.
+
+Size limits: photos up to 8MB, video and voice notes up to 40MB — plenty for a phone photo or a short clip, while keeping storage costs sane.
 
 ## What's deliberately simple in this version
 
