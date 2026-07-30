@@ -31,6 +31,8 @@ const state = {
   eventSuggestions: [],
   eventPolls: [],
   eventPollVotes: [],
+  payments: [],
+  creditLog: [],
   ready: false,
   authBusy: false,
   authSentTo: null,
@@ -74,8 +76,14 @@ function playerPaidTotal(playerId){
   const loggedPaid = logsFor(playerId).filter(l=>l.paid && !l.waived).reduce((s,l)=>s+Number(l.amount),0);
   return (p ? Number(p.season_paid||0) : 0) + loggedPaid;
 }
-function totalCollected(){ return state.players.reduce((s,p)=>s+playerPaidTotal(p.id),0); }
+// Payments = money an admin has logged as spent OUT of the pot (e.g. kit,
+// trophies, a social). Deducted straight off the season's headline total —
+// see the "Total Collected This Season" card, which shows this net figure.
+function totalPayments(){ return state.payments.reduce((s,pay)=>s+Number(pay.amount),0); }
+function grossCollected(){ return state.players.reduce((s,p)=>s+playerPaidTotal(p.id),0); }
+function totalCollected(){ return grossCollected() - totalPayments(); }
 function totalOutstanding(){ return state.fineLog.filter(l=>!l.paid).reduce((s,l)=>s+Number(l.amount),0); }
+function playerCreditBalance(playerId){ const p = getPlayer(playerId); return p ? Number(p.credit_balance||0) : 0; }
 function playersWithOutstanding(){ return state.players.filter(p=>playerOwed(p.id)>0).sort((a,b)=>playerOwed(b.id)-playerOwed(a.id)); }
 function pctSquadOutstanding(){ if(!state.players.length) return 0; return Math.round((playersWithOutstanding().length/state.players.length)*100); }
 function mostWantedPlayer(){
@@ -187,7 +195,7 @@ const ICONS = {
 
 /* ---------------- data loading ---------------- */
 async function loadAll(){
-  const [teamRes, playersRes, finesRes, logRes, annRes, evRes, courtCasesRes, courtVotesRes, suggRes, pollsRes, pollVotesRes] = await Promise.all([
+  const [teamRes, playersRes, finesRes, logRes, annRes, evRes, courtCasesRes, courtVotesRes, suggRes, pollsRes, pollVotesRes, paymentsRes, creditLogRes] = await Promise.all([
     sb.from('team_info').select('*').eq('id',1).maybeSingle(),
     sb.from('players').select('*').order('created_at'),
     sb.from('fines').select('*').order('created_at'),
@@ -199,6 +207,8 @@ async function loadAll(){
     sb.from('event_suggestions').select('*').order('created_at',{ascending:false}),
     sb.from('event_polls').select('*').order('created_at',{ascending:false}),
     sb.from('event_poll_votes').select('*'),
+    sb.from('payments').select('*').order('created_at',{ascending:false}),
+    sb.from('credit_log').select('*').order('created_at',{ascending:false}),
   ]);
   if(teamRes.data) state.team = teamRes.data;
   state.players = playersRes.data || [];
@@ -211,6 +221,8 @@ async function loadAll(){
   state.eventSuggestions = suggRes.data || [];
   state.eventPolls = pollsRes.data || [];
   state.eventPollVotes = pollVotesRes.data || [];
+  state.payments = paymentsRes.data || [];
+  state.creditLog = creditLogRes.data || [];
   state.me = state.players.find(p=>p.id === state.session.user.id) || null;
 }
 
@@ -800,7 +812,7 @@ function viewDashboard(){
     <div class="hero-collected">
       <div class="label">🏆 Total Collected This Season</div>
       <div class="value">${fmt(totalCollected())}</div>
-      <div class="sub">Keep the fines flowing, keep the socials funded</div>
+      <div class="sub">${totalPayments()>0 ? `${fmt(grossCollected())} collected · ${fmt(totalPayments())} spent (Payments)` : 'Keep the fines flowing, keep the socials funded'}</div>
     </div>
     <div class="pct-tile">
       <div class="pct-ring" style="--pct:${pct};"><div class="pct-ring-inner">${pct}%</div></div>
@@ -1116,11 +1128,18 @@ function viewPlayerProfile(){
       <div class="stat-tile good"><div class="label">Paid this season</div><div class="value">${fmt(playerPaidTotal(p.id))}</div></div>
       <div class="stat-tile"><div class="label">Fines logged</div><div class="value">${logs.length}</div></div>
     </div>
+    ${ playerCreditBalance(p.id) > 0 ? `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="row" style="gap:10px;align-items:center;">
+        <div style="font-size:22px;">🎟️</div>
+        <div><div style="font-weight:700;">${fmt(playerCreditBalance(p.id))} free credit</div><div class="muted" style="font-size:12.5px;">Automatically comes off your next fine before anything's owed.</div></div>
+      </div>
+    </div>` : '' }
     <div class="section-title">Fine history</div>
     <div class="card">
       ${logs.length ? logs.map(l=>`
         <div class="row between" style="margin-bottom:8px;">
-          <div><div class="name" style="font-size:13.5px;">${escapeHtml(l.label)}</div><div class="muted">${l.date}</div></div>
+          <div><div class="name" style="font-size:13.5px;">${escapeHtml(l.label)}</div><div class="muted">${l.date}${Number(l.credit_applied||0)>0?` · ${fmt(l.credit_applied)} covered by credit`:''}</div></div>
           <span class="pill ${l.paid?'clear':'owed'}">${fmt(l.amount)} ${l.paid?'· paid':''}</span>
         </div>`).join('') : `<div class="empty">No fines logged yet — nice one.</div>`}
     </div>
@@ -1286,10 +1305,27 @@ function viewTeamSettings(){
       <button class="btn btn-primary" id="saveTeamSettingsBtn" style="margin-top:14px;">Save settings</button>
     </div>
 
+    <div class="section-title">💰 Payments (money spent from the pot)</div>
+    <div class="card">
+      <div class="muted" style="margin-bottom:10px;">Log money that's gone OUT of the season's collected total — kit, trophies, a social, anything spent from the fines pot. Each entry here is subtracted from "Total Collected This Season" on the Dashboard, so the headline number always reflects what's actually still in the pot.</div>
+      <button class="btn btn-outline" id="logPaymentBtn">+ Log a payment</button>
+      ${ state.payments.length ? `
+      <div class="divider"></div>
+      ${state.payments.map(pay=>`
+        <div class="row between" style="margin-bottom:8px;">
+          <div><div style="font-size:13.5px;font-weight:700;">${escapeHtml(pay.note)}</div><div class="muted">${new Date(pay.created_at).toLocaleDateString()}</div></div>
+          <div class="row" style="gap:8px;">
+            <span class="pill owed">-${fmt(pay.amount)}</span>
+            <button class="link-btn" data-del-payment="${pay.id}" title="Delete this payment entry">✕</button>
+          </div>
+        </div>`).join('')}
+      ` : `<div class="empty" style="margin-top:10px;">No payments logged yet</div>` }
+    </div>
+
     <div class="section-title">Danger zone</div>
     <div class="card">
       <div class="muted" style="margin-bottom:10px;">Permanently deletes every logged fine and resets everyone's "paid this season" total back to £0.00. Your fines catalog, players, events, and announcements are untouched — just the money data gets wiped. Use this once, right before you actually launch, to clear out test entries.</div>
-      <button class="btn btn-danger" id="resetFinesBtn">Reset all fines &amp; payments</button>
+      <button class="btn btn-danger" id="resetFinesBtn">Reset all fines &amp; player payments</button>
       <div class="muted" style="margin:16px 0 10px;">Permanently deletes every Court case, along with its chat messages and votes. Committee members and fines are untouched — just the test disputes get wiped. Use this once, right before you actually launch, to clear out any test cases you opened while trying out Court.</div>
       <button class="btn btn-danger" id="resetCourtBtn">Reset Court (clear all cases)</button>
     </div>
@@ -1466,6 +1502,16 @@ function bindGlobalEvents(){
     toast('Team settings saved');
   });
 
+  const logPaymentBtn = document.getElementById('logPaymentBtn');
+  if(logPaymentBtn) logPaymentBtn.addEventListener('click', openLogPaymentModal);
+  root.querySelectorAll('[data-del-payment]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this payment entry? This cannot be undone.')) return;
+    const { error } = await sb.from('payments').delete().eq('id', btn.dataset.delPayment);
+    if(error){ toast('Could not delete that entry: ' + error.message); return; }
+    await refresh();
+    toast('Payment entry deleted');
+  }));
+
   const resetFinesBtn = document.getElementById('resetFinesBtn');
   if(resetFinesBtn) resetFinesBtn.addEventListener('click', async ()=>{
     if(!confirm('This permanently deletes every logged fine and resets all "paid this season" totals to £0.00. This cannot be undone. Continue?')) return;
@@ -1501,9 +1547,73 @@ function openLogFineModal(fineId){
   document.getElementById('confirmLogFineBtn').addEventListener('click', async ()=>{
     const pid = document.getElementById('logFinePlayerSelect').value;
     const amount = fineAmountNow(fine.price);
-    await sb.from('fine_log').insert({ player_id: pid, fine_id: fine.id, label: fine.label, amount, date: todayISO(), paid:false });
+    // Free credit comes off the fine automatically, before anything is owed.
+    // If they've got enough credit to cover it, the fine's logged as already
+    // paid (amount owed = 0) — credit isn't "money collected" though, so it
+    // deliberately doesn't move totalCollected().
+    const creditAvailable = playerCreditBalance(pid);
+    const creditApplied = Math.min(creditAvailable, amount);
+    const remaining = amount - creditApplied;
+    const { error } = await sb.from('fine_log').insert({
+      player_id: pid, fine_id: fine.id, label: fine.label,
+      amount: remaining, credit_applied: creditApplied,
+      date: todayISO(), paid: remaining <= 0,
+    });
+    if(error){ toast('Could not log that fine: ' + error.message); return; }
+    if(creditApplied > 0){
+      const newBalance = creditAvailable - creditApplied;
+      await sb.from('players').update({ credit_balance: newBalance }).eq('id', pid);
+      await sb.from('credit_log').insert({ player_id: pid, amount: -creditApplied, reason: `Applied to fine: ${fine.label}`, created_by: state.me.id });
+    }
     closeModal(); await refresh();
-    toast(`${fmt(amount)} added to ${getPlayer(pid).name}`);
+    const playerName = getPlayer(pid).name;
+    if(creditApplied > 0 && remaining <= 0) toast(`${fmt(creditApplied)} credit covered the whole fine for ${playerName} — nothing owed`);
+    else if(creditApplied > 0) toast(`${fmt(creditApplied)} credit applied — ${fmt(remaining)} still added to ${playerName}`);
+    else toast(`${fmt(amount)} added to ${playerName}`);
+  });
+}
+
+function openGrantCreditModal(playerId){
+  const p = getPlayer(playerId);
+  openModal(`
+    <div class="muted" style="margin-bottom:10px;">Current credit balance: <b>${fmt(playerCreditBalance(playerId))}</b></div>
+    <label class="field-label">Amount to grant (£)</label>
+    <input type="number" id="grantCreditAmountInput" min="0.01" step="0.5" placeholder="e.g. 5">
+    <label class="field-label">Reason (optional, shown in their credit history)</label>
+    <input type="text" id="grantCreditReasonInput" placeholder="e.g. Man of the match">
+    <button class="btn btn-primary" id="confirmGrantCreditBtn" style="margin-top:16px;">Grant credit</button>
+  `, { title: `Grant credit — ${p.name}` });
+  document.getElementById('confirmGrantCreditBtn').addEventListener('click', async ()=>{
+    const amount = parseFloat(document.getElementById('grantCreditAmountInput').value);
+    if(!amount || amount <= 0){ toast('Enter an amount greater than £0.'); return; }
+    const reason = document.getElementById('grantCreditReasonInput').value.trim() || 'Credit granted';
+    const newBalance = playerCreditBalance(playerId) + amount;
+    const { error } = await sb.from('players').update({ credit_balance: newBalance }).eq('id', playerId);
+    if(error){ toast('Could not grant credit: ' + error.message); return; }
+    await sb.from('credit_log').insert({ player_id: playerId, amount, reason, created_by: state.me.id });
+    closeModal(); await refresh();
+    toast(`${fmt(amount)} credit granted to ${p.name}`);
+  });
+}
+
+function openLogPaymentModal(){
+  openModal(`
+    <label class="field-label">Amount spent (£)</label>
+    <input type="number" id="paymentAmountInput" min="0.01" step="0.5" placeholder="e.g. 40">
+    <label class="field-label">What was it for?</label>
+    <input type="text" id="paymentNoteInput" placeholder="e.g. End-of-season trophies">
+    <button class="btn btn-primary" id="confirmLogPaymentBtn" style="margin-top:16px;">Log payment</button>
+    <small class="disclaimer">This is subtracted from "Total Collected This Season" straight away — use it to record money that's actually left the pot.</small>
+  `, { title:'Log a payment' });
+  document.getElementById('confirmLogPaymentBtn').addEventListener('click', async ()=>{
+    const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+    if(!amount || amount <= 0){ toast('Enter an amount greater than £0.'); return; }
+    const note = document.getElementById('paymentNoteInput').value.trim();
+    if(!note){ toast('Add a short note explaining what this payment was for.'); return; }
+    const { error } = await sb.from('payments').insert({ amount, note, created_by: state.me.id });
+    if(error){ toast('Could not log that payment: ' + error.message); return; }
+    closeModal(); await refresh();
+    toast(`${fmt(amount)} payment logged`);
   });
 }
 
@@ -1608,9 +1718,16 @@ function openPlayerDetailModal(playerId){
       <button class="btn btn-outline btn-sm" id="savePlayerNameBtn">Save</button>
     </div>
     <div class="divider"></div>
+    <label class="field-label">Free credit balance</label>
+    <div class="row between" style="align-items:center;">
+      <div style="font-size:15px;font-weight:700;">${fmt(playerCreditBalance(p.id))}</div>
+      <button class="btn btn-outline btn-sm" id="grantCreditBtn">+ Grant credit</button>
+    </div>
+    <small class="disclaimer">Credit is used automatically the next time this player gets a fine — it comes off the fine amount first, and they only owe whatever's left. Doesn't count as money "collected."</small>
+    <div class="divider"></div>
     ${logs.length? logs.map(l=>`
       <div class="row between" style="margin-bottom:8px;">
-        <div><div style="font-size:13.5px;font-weight:700;">${escapeHtml(l.label)}</div><div class="muted">${l.date}</div></div>
+        <div><div style="font-size:13.5px;font-weight:700;">${escapeHtml(l.label)}</div><div class="muted">${l.date}${Number(l.credit_applied||0)>0?` · ${fmt(l.credit_applied)} covered by credit`:''}</div></div>
         <div class="row" style="gap:8px;">
           <span class="pill ${l.waived?'gold':l.paid?'clear':'owed'}">${l.waived?'Waived by Court':fmt(l.amount)}</span>
           <button class="link-btn" data-del-log="${l.id}" title="Delete this fine entry">✕</button>
@@ -1649,6 +1766,8 @@ function openPlayerDetailModal(playerId){
     closeModal(); await refresh();
     toast(`${p.name}'s balance cleared`);
   });
+  const grantCreditBtn = document.getElementById('grantCreditBtn');
+  if(grantCreditBtn) grantCreditBtn.addEventListener('click', ()=>openGrantCreditModal(p.id));
   const makeAdminBtn = document.getElementById('makeAdminBtn');
   if(makeAdminBtn) makeAdminBtn.addEventListener('click', async ()=>{
     const { error } = await sb.from('players').update({ is_admin:true }).eq('id', p.id);
