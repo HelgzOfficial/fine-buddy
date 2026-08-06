@@ -198,7 +198,7 @@ async function loadAll(){
   const [teamRes, playersRes, finesRes, logRes, annRes, evRes, courtCasesRes, courtVotesRes, suggRes, pollsRes, pollVotesRes, paymentsRes, creditLogRes] = await Promise.all([
     sb.from('team_info').select('*').eq('id',1).maybeSingle(),
     sb.from('players').select('*').order('created_at'),
-    sb.from('fines').select('*').order('created_at'),
+    sb.from('fines').select('*').order('sort_order'),
     sb.from('fine_log').select('*').order('date',{ascending:false}),
     sb.from('announcements').select('*').order('created_at'),
     sb.from('events').select('*').order('date'),
@@ -915,8 +915,14 @@ function viewFinesAdmin(){
             <div class="title">${escapeHtml(f.label)}</div>
             <div class="sub">${fmt(f.price)} standard${state.team.double_bubble?` · doubled to ${fmt(fineAmountNow(f.price))}`:''}</div>
           </div>
-          <div class="row" style="gap:6px;">
+          <div class="row" style="gap:4px;">
             <span class="price-tag ${state.team.double_bubble?'doubled':''}">${fmt(fineAmountNow(f.price))}</span>
+            <button class="icon-btn" data-move-fine-up="${f.id}" onclick="event.stopPropagation()" aria-label="Move up" ${i===0?'disabled style="opacity:.3;"':''}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><path d="M5 12l7-7 7 7"/></svg>
+            </button>
+            <button class="icon-btn" data-move-fine-down="${f.id}" onclick="event.stopPropagation()" aria-label="Move down" ${i===state.fines.length-1?'disabled style="opacity:.3;"':''}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><path d="M19 12l-7 7-7-7"/></svg>
+            </button>
             <button class="icon-btn" data-edit-fine="${f.id}" onclick="event.stopPropagation()" aria-label="Edit">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.5l5 5L8 21H3v-5z"/></svg>
             </button>
@@ -1457,6 +1463,8 @@ function bindGlobalEvents(){
 
   root.querySelectorAll('[data-log-fine]').forEach(el=>el.addEventListener('click', ()=>openLogFineModal(el.dataset.logFine)));
   root.querySelectorAll('[data-edit-fine]').forEach(el=>el.addEventListener('click',(e)=>{ e.stopPropagation(); openEditFineModal(el.dataset.editFine); }));
+  root.querySelectorAll('[data-move-fine-up]').forEach(el=>el.addEventListener('click',(e)=>{ e.stopPropagation(); moveFine(el.dataset.moveFineUp, 'up'); }));
+  root.querySelectorAll('[data-move-fine-down]').forEach(el=>el.addEventListener('click',(e)=>{ e.stopPropagation(); moveFine(el.dataset.moveFineDown, 'down'); }));
 
   const fabAddFine=document.getElementById('fabAddFine'); if(fabAddFine) fabAddFine.addEventListener('click',()=>openEditFineModal(null));
   const fabInvite=document.getElementById('fabInvite'); if(fabInvite) fabInvite.addEventListener('click', openInviteModal);
@@ -1615,6 +1623,23 @@ function openLogPaymentModal(){
     closeModal(); await refresh();
     toast(`${fmt(amount)} payment logged`);
   });
+}
+
+// Reordering just swaps the sort_order value between a fine and its
+// neighbour in the currently-displayed (already sort_order-sorted) list —
+// no need to touch anything else in the list.
+async function moveFine(fineId, direction){
+  const idx = state.fines.findIndex(f=>f.id===fineId);
+  if(idx<0) return;
+  const swapIdx = direction==='up' ? idx-1 : idx+1;
+  if(swapIdx<0 || swapIdx>=state.fines.length) return;
+  const a = state.fines[idx], b = state.fines[swapIdx];
+  const [{error:err1},{error:err2}] = await Promise.all([
+    sb.from('fines').update({ sort_order: b.sort_order }).eq('id', a.id),
+    sb.from('fines').update({ sort_order: a.sort_order }).eq('id', b.id),
+  ]);
+  if(err1 || err2){ toast('Could not reorder: ' + (err1||err2).message); return; }
+  await refresh();
 }
 
 function openEditFineModal(fineId){
